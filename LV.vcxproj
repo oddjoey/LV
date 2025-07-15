@@ -88,9 +88,10 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Programming\Libraries\glfw-3.3.9.bin.WIN64\include;D:\Programming\Libraries\glm;D:\Programming\Libraries\Vulkan-SDK\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\Programming\Libraries\glfw-3.3.9.bin.WIN64\include;D:\Programming\Libraries\glm;D:\Programming\Libraries\Vulkan-SDK\Include;D:\Programming\Libraries\termcolor;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -107,9 +108,10 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Programming\Libraries\glfw-3.3.9.bin.WIN64\include;D:\Programming\Libraries\glm;D:\Programming\Libraries\Vulkan-SDK\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\Programming\Libraries\glfw-3.3.9.bin.WIN64\include;D:\Programming\Libraries\glm;D:\Programming\Libraries\Vulkan-SDK\Include;D:\Programming\Libraries\termcolor;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -126,9 +128,10 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Programming\Libraries\glfw-3.3.9.bin.WIN64\include;D:\Programming\Libraries\glm;D:\Programming\Libraries\Vulkan-SDK\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\Programming\Libraries\glfw-3.3.9.bin.WIN64\include;D:\Programming\Libraries\glm;D:\Programming\Libraries\Vulkan-SDK\Include;D:\Programming\Libraries\termcolor;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -145,9 +148,10 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Programming\Libraries\glfw-3.3.9.bin.WIN64\include;D:\Programming\Libraries\glm;D:\Programming\Libraries\Vulkan-SDK\Include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\Programming\Libraries\glfw-3.3.9.bin.WIN64\include;D:\Programming\Libraries\glm;D:\Programming\Libraries\Vulkan-SDK\Include;D:\Programming\Libraries\termcolor;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
-      <LanguageStandard>stdcpp17</LanguageStandard>
+      <LanguageStandard>stdcpp20</LanguageStandard>
+      <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
     </ClCompile>
     <Link>
       <SubSystem>Console</SubSystem>
@@ -159,13 +163,16 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Engine\cLordi.cpp" />
-    <ClCompile Include="Engine\cGraphics.cpp" />
+    <ClCompile Include="Engine\Lordi.cpp" />
+    <ClCompile Include="Engine\Graphics.cpp" />
+    <ClCompile Include="Engine\Settings.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Engine\cLordi.h" />
-    <ClInclude Include="Engine\cGraphics.h" />
+    <ClInclude Include="Engine\Lordi.h" />
+    <ClInclude Include="Engine\Graphics.h" />
+    <ClInclude Include="Engine\Logger.h" />
+    <ClInclude Include="Engine\Settings.h" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

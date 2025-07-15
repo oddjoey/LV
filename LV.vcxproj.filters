@@ -18,18 +18,27 @@
     <ClCompile Include="main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\cGraphics.cpp">
+    <ClCompile Include="Engine\Graphics.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\cLordi.cpp">
+    <ClCompile Include="Engine\Lordi.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Settings.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Engine\cGraphics.h">
+    <ClInclude Include="Engine\Graphics.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\cLordi.h">
+    <ClInclude Include="Engine\Lordi.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Logger.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Settings.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
