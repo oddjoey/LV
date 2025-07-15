@@ -42,6 +42,7 @@ void Graphics::Initialize()
     PickPhysicalDevice();
     CreateLogicalDevice();
     CreateSwapChain();
+	CreateImageViews();
 
     LOG_SUCCESS("Graphics initialized successfully!");
 }
@@ -232,7 +233,7 @@ void Graphics::CreateSwapChain()
     if (settings.Empty())
         LOG_WARNING("Graphics settings are empty, using default values...");
     else
-        switch (settings.m_eVSyncOption)
+        switch (settings.m_VSyncOption)
         {
             case VSyncOptions::NONE:
                 userPresentMode = VK_PRESENT_MODE_IMMEDIATE_KHR; // No VSync
@@ -326,7 +327,49 @@ void Graphics::CreateSwapChain()
     if (vkCreateSwapchainKHR(m_pLogicalDevice, &m_SwapChainCreateInfo, nullptr, &m_pSwapChain) != VK_SUCCESS)
 		throw std::runtime_error("failed to create swap chain!");
 
+    // Get swap chain images
+    vkGetSwapchainImagesKHR(m_pLogicalDevice, m_pSwapChain, &swapChainImageCount, nullptr);
+    if (!swapChainImageCount)
+        throw std::runtime_error("No swap chain images found");
+
+    auto swapChainImages = std::make_unique<std::vector<VkImage>>(swapChainImageCount);
+    vkGetSwapchainImagesKHR(m_pLogicalDevice, m_pSwapChain, &swapChainImageCount, swapChainImages->data());
+	m_pSwapChainImages.swap(swapChainImages);
+
 	LOG_SUCCESS("Swap chain created successfully!");
+}
+
+void Graphics::CreateImageViews()
+{
+    LOG_INFO("Creating image views for swap chain images...");
+
+	m_pSwapChainImageViews = std::make_unique<std::vector<VkImageView>>(m_pSwapChainImages->size());
+
+    for (auto i = 0; i < m_pSwapChainImages->size(); i++)
+    {
+        VkImageViewCreateInfo imageViewCreateInfo = {};
+		imageViewCreateInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+		imageViewCreateInfo.image = m_pSwapChainImages->data()[i];
+		// 1D texture, 2D texture, 3D texture, cube map, etc.
+		imageViewCreateInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+		imageViewCreateInfo.format = m_SwapChainCreateInfo.imageFormat;
+		// components allows manipulation of the color channels of the image
+		imageViewCreateInfo.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+		imageViewCreateInfo.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+		imageViewCreateInfo.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+		imageViewCreateInfo.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+		// subresource range specifies which part of the image to use aswell as mipmapping and array layers
+		imageViewCreateInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT; // color aspect
+		imageViewCreateInfo.subresourceRange.baseMipLevel = 0; // base mip level
+		imageViewCreateInfo.subresourceRange.levelCount = 1; // number of mip levels to use
+		imageViewCreateInfo.subresourceRange.baseArrayLayer = 0; // base array layer
+		imageViewCreateInfo.subresourceRange.layerCount = 1; // number of array layers to use
+
+        if (vkCreateImageView(m_pLogicalDevice, &imageViewCreateInfo, nullptr, &m_pSwapChainImageViews->data()[i]) != VK_SUCCESS)
+			throw std::runtime_error("failed to create image view for swap chain image!");
+    }
+
+	LOG_SUCCESS("Image views for swap chain images created successfully!");
 }
 
 void Graphics::CreateWindowSurface()
@@ -553,6 +596,8 @@ void Graphics::CleanupVulkan()
 {
 	LOG_INFO("Cleaning up Vulkan...");
 
+    for (const auto& imageView : *m_pSwapChainImageViews)
+		vkDestroyImageView(m_pLogicalDevice, imageView, nullptr);
     if (m_pSwapChain != nullptr)
         vkDestroySwapchainKHR(m_pLogicalDevice, m_pSwapChain, nullptr);
 	if (m_pLogicalDevice != nullptr)

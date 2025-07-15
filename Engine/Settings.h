@@ -21,7 +21,7 @@ struct GraphicsSettings_t
 		defaultSettings.m_sWindowName = "Lordi Engine";
 		defaultSettings.m_uiWindowWidth = 1280;
 		defaultSettings.m_uiWindowHeight = 720;
-		defaultSettings.m_eVSyncOption = VSyncOptions::ENABLED;
+		defaultSettings.m_VSyncOption = VSyncOptions::ENABLED;
 		return defaultSettings;
 	}
 	bool Empty() const
@@ -34,13 +34,13 @@ struct GraphicsSettings_t
 		return m_sWindowName == other.m_sWindowName &&
 			   m_uiWindowWidth == other.m_uiWindowWidth &&
 			   m_uiWindowHeight == other.m_uiWindowHeight &&
-			   m_eVSyncOption == other.m_eVSyncOption;
+			   m_VSyncOption == other.m_VSyncOption;
 	}
 
 	std::string m_sWindowName = "";
 	unsigned int m_uiWindowWidth = 0;
 	unsigned int m_uiWindowHeight = 0;
-	VSyncOptions m_eVSyncOption = {};
+	VSyncOptions m_VSyncOption = {};
 };
 
 class Settings

@@ -52,7 +52,7 @@
 
 	 		- Surface is cross-platform abstraction for rendering to a window or other displayable area
 
-	[] 7. Create a swap chain with settings to manage the images that will be presented to the surface.
+	[done!] 7. Create a swap chain with settings to manage the images that will be presented to the surface.
 		
 			- Involves checking for swap chain support on the GPU
 			
@@ -82,6 +82,8 @@
 	 		- Wrap the swap chain into image views to be drawn to the screen.
 
 	 		- Image views specify what part of the image to use.
+
+				- e.g 2D texture, mipmap, cube map, etc.
 
 	[] 9. Create a framebuffer.
 
@@ -119,7 +121,7 @@ class Graphics
 	// instance of cGraphics, used as a singleton (single instance throughout the application)
 	static std::shared_ptr<Graphics> _instance;
 	Graphics();
-	// returns the instance of cGraphics, creates it if it doesn't exist
+	// returns the instance of Graphics, creates it if it doesn't exist
 	static std::shared_ptr<Graphics> Get();
 public:
 	void Initialize();
@@ -134,7 +136,6 @@ private:
 	static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
 
 	void InitializeWindow();
-
 	void CreateWindowSurface();
 
 	void CreateVulkanInstance();
@@ -144,13 +145,16 @@ private:
 	bool IsLayerPresent(const std::string& layerName);
 	bool IsExtensionPresent(const std::string& extensionName);
 
+	// Check if the physical device is suitable for our needs
 	bool IsDeviceSuitable(const VkPhysicalDevice& device);
-	// Pick a physical device (GPU) that supports the required features and queues
+	// Pick a physical device that supports the required features and queues
 	void PickPhysicalDevice();
 	// Create logical device, used to interface with the physical device
 	// Describes the queues and features that the logical device will support
 	void CreateLogicalDevice();
+	// Create swap chain, used to manage the images that will be presented to the surface
 	void CreateSwapChain();
+	void CreateImageViews();
 private:
 	const std::vector<const char*> c_RequiredValidationLayers = { "VK_LAYER_KHRONOS_validation" };
 	const std::vector<const char*> c_RequiredDeviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
@@ -184,6 +188,13 @@ private:
 	// Index of queue that supports window surface presentation
 	uint32_t m_uiWindowPresentFamilyIndex = 0;
 
+	// Logical device is used to interface with the physical device
+	VkDevice m_pLogicalDevice = nullptr;
+	// Handle to our graphics queue to submit commands
+	VkQueue m_pGraphicsQueue = nullptr;
+	// Handle to our present queue for window surface drawing
+	VkQueue m_pPresentQueue = nullptr;
+
 	// min/max image count, min/max image dimensions
 	VkSurfaceCapabilitiesKHR m_SwapChainCapabilities = {};
 	// Supported formats for the swap chain images, e.g. format (color channels and types) and color space (sRGB, linear, etc.)
@@ -198,13 +209,10 @@ private:
 	VkSwapchainCreateInfoKHR m_SwapChainCreateInfo = {};
 	// Swap chain
 	VkSwapchainKHR m_pSwapChain = nullptr;
+	// Swap chain image handles
+	std::unique_ptr<std::vector<VkImage>> m_pSwapChainImages = nullptr;
 
-	// Logical device is used to interface with the physical device
-	VkDevice m_pLogicalDevice = nullptr;
-	// Handle to our graphics queue to submit commands
-	VkQueue m_pGraphicsQueue = nullptr;
-	// Handle to our present queue for window surface drawing
-	VkQueue m_pPresentQueue = nullptr;
+	std::unique_ptr<std::vector<VkImageView>> m_pSwapChainImageViews = nullptr;
 
 	// Window surface, the area where the swap chain images will be presented
 	VkSurfaceKHR m_pWindowSurface = nullptr;
