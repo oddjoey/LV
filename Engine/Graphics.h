@@ -147,6 +147,7 @@ private:
 	void CreateLogicalDevice();
 	void CreateSwapChain();
 	void CreateImageViews();
+	void CreateRenderPass();
 	void CreateGraphicsPipeline();
 
 	friend class Lordi;
@@ -216,6 +217,7 @@ private:
 	// Fragment shader module
 	VkShaderModule m_pFragmentShaderModule = nullptr;
 
+	VkRenderPass m_pRenderPass = nullptr;
 	// Pipeline layout, describes the layout of the pipeline, e.g. descriptor sets, push constants, etc.
 	VkPipelineLayout m_pPipelineLayout = nullptr;
 

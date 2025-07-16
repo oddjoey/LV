@@ -44,6 +44,12 @@ void Settings::SetSettings(const GraphicsSettings& settings)
 
 GraphicsSettings Settings::GetGraphicsSettings() const
 {
+	if (m_tSettings.Empty())
+	{
+		LOG_WARNING("Graphics settings are not set, using defaults...");
+		return m_tSettings.Defaults();
+	}
+
 	return m_tSettings;
 }
 

@@ -43,6 +43,7 @@ void Graphics::Initialize()
     CreateLogicalDevice();
     CreateSwapChain();
 	CreateImageViews();
+	CreateRenderPass();
     CreateGraphicsPipeline();
 
     LOG_SUCCESS("Graphics initialized successfully!");
@@ -231,25 +232,22 @@ void Graphics::CreateSwapChain()
 
 	auto settings = Settings::Get()->GetGraphicsSettings();
 
-    if (settings.Empty())
-        LOG_WARNING("Graphics settings are empty, using default values...");
-    else
-        switch (settings.m_VSyncOption)
-        {
-            case VSyncOptions::NONE:
-                userPresentMode = VK_PRESENT_MODE_IMMEDIATE_KHR; // No VSync
-			    break;
-            case VSyncOptions::ENABLED:
-                userPresentMode = VK_PRESENT_MODE_FIFO_KHR; // VSync
-			    break;
-            case VSyncOptions::RELAXED:
-			    userPresentMode = VK_PRESENT_MODE_FIFO_RELAXED_KHR; // Relaxed VSync
-                break;
-		    case VSyncOptions::MAILBOX:
-			    userPresentMode = VK_PRESENT_MODE_MAILBOX_KHR; // Mailbox VSync (triple buffering)
-                break;
-        }
-
+    switch (settings.m_VSyncOption)
+    {
+        case VSyncOptions::NONE:
+            userPresentMode = VK_PRESENT_MODE_IMMEDIATE_KHR; // No VSync
+            break;
+        case VSyncOptions::ENABLED:
+            userPresentMode = VK_PRESENT_MODE_FIFO_KHR; // VSync
+            break;
+        case VSyncOptions::RELAXED:
+            userPresentMode = VK_PRESENT_MODE_FIFO_RELAXED_KHR; // Relaxed VSync
+            break;
+        case VSyncOptions::MAILBOX:
+            userPresentMode = VK_PRESENT_MODE_MAILBOX_KHR; // Mailbox VSync (triple buffering)
+            break;
+    }
+        
     for (const auto& presentMode : *m_pSwapChainPresentModes)
         if (presentMode == userPresentMode)
         {
@@ -371,6 +369,69 @@ void Graphics::CreateImageViews()
     }
 
 	LOG_SUCCESS("Image views for swap chain images created successfully!");
+}
+
+void Graphics::CreateRenderPass()
+{
+    LOG_INFO("Creating render pass...");
+
+    // Render pass is a collection of attachments (images) and subpasses (rendering operations)
+    // It defines how images are used during rendering
+    VkAttachmentDescription colorAttachment = {};
+    colorAttachment.format = m_SwapChainCreateInfo.imageFormat; // format of the color attachment
+    colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT; // number of samples per pixel (1 for no multisampling)
+    // what to do with data in attachment before rendering
+    // VK_ATTACHMENT_LOAD_OP_LOAD (preserves  data in attachment)
+    // VK_ATTACHMENT_LOAD_OP_CLEAR (clears data in attachment)
+    // VK_ATTACHMENT_LOAD_OP_DONT_CARE (ignores the data in the attachment)
+    colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR; // clear the attachment before rendering
+	// what to do with data in attachment after rendering
+	// VK_ATTACHMENT_STORE_OP_STORE stores the data in the attachment in memory to be used later
+	// VK_ATTACHMENT_STORE_OP_DONT_CARE ignores the data in the attachment, data is not preserved
+    colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE; // store the attachment after rendering
+    colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE; // no stencil buffer
+    colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; // no stencil buffer
+    // VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL 
+    //  -   images used as color attachments during rendering
+    // VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
+    //  -   images used for presentation to the screen aka for the swap chain)
+	// VK_IMAGE_LAYOUT_UNDEFINED 
+    //  -   dont care about initial layout, we'll set it in finalLayout, also data not guaranteed to be preserved
+    // VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL 
+    //  -   images used for transfer operations (e.g. blitting, copying, etc.)
+    colorAttachment.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED; // initial layout of the attachment
+    colorAttachment.finalLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR; // final layout of the attachment (ready for presentation)
+
+	// Attachment reference is used to specify how the attachment is used in the subpass
+    VkAttachmentReference colorAttachmentRef = {};
+    colorAttachmentRef.attachment = 0; // index of the color attachment
+    colorAttachmentRef.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL; // layout of color attachment during rendering
+
+	// A single render pass can have multiple subpasses,
+    // subpasses are subsequent rendering operations that depend on the contents
+	// of the previous framebuffers from previous passes. e.g. post-processing effects
+    // other types of attachments:
+	// pInputAttachments - input attachments (used as input to the subpass)
+	// pResolveAttachments - resolve attachments (used for multisampling)
+    // pDepthStencilAttachment - depth/stencil attachments (used for depth/stencil testing)
+	// pPreserveAttachments - preserve attachments (used to preserve the contents of the attachment)
+    VkSubpassDescription subpass = {};
+    subpass.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS; // subpass is a graphics pipeline
+    subpass.colorAttachmentCount = 1; // number of color attachments
+    subpass.pColorAttachments = &colorAttachmentRef; // pointer to the color attachment reference
+	// colorAttachmentRef & subpass = "layout(location = 0) out vec4 outColor" in the fragment shader
+
+    VkRenderPassCreateInfo renderPassInfo = {};
+    renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    renderPassInfo.attachmentCount = 1; // number of attachments
+    renderPassInfo.pAttachments = &colorAttachment; // pointer to the attachments
+    renderPassInfo.subpassCount = 1; // number of subpasses
+	renderPassInfo.pSubpasses = &subpass; // pointer
+
+	if (vkCreateRenderPass(m_pLogicalDevice, &renderPassInfo, nullptr, &m_pRenderPass) != VK_SUCCESS)
+		throw std::runtime_error("failed to create render pass!");
+
+	LOG_SUCCESS("Render pass created successfully!");
 }
 
 void Graphics::CreateGraphicsPipeline()
@@ -516,11 +577,6 @@ void Graphics::CreateGraphicsPipeline()
 	// VkPipelineDepthStencilStateCreateInfo depthStencilInfo = {};
 
 	auto settings = Settings::Get()->GetGraphicsSettings();
-    if (settings.Empty())
-    {
-        LOG_WARNING("Graphics settings are empty, using default values...");
-        settings = settings.Defaults();
-    }
 
 	// color blending state describes how the colors of the fragments are blended with the colors of the framebuffer.
 	// attachment state describes how the color attachment is blended for each framebuffer
@@ -767,11 +823,6 @@ void Graphics::InitializeWindow()
     glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
 	auto settings = Settings::Get()->GetGraphicsSettings();
-    if (settings.Empty())
-    {
-        LOG_WARNING("Graphics settings are not set, using defaults...");
-		settings = settings.Defaults();
-	}
 
     m_pWindow = glfwCreateWindow(settings.m_uiWindowWidth, settings.m_uiWindowHeight, settings.m_sWindowName.c_str(), nullptr, nullptr);
     if (m_pWindow == nullptr)
@@ -789,6 +840,9 @@ void Graphics::CleanupVulkan()
 
 	if (m_pPipelineLayout != nullptr)
 		vkDestroyPipelineLayout(m_pLogicalDevice, m_pPipelineLayout, nullptr);
+
+	if (m_pRenderPass != nullptr)
+		vkDestroyRenderPass(m_pLogicalDevice, m_pRenderPass, nullptr);
 
     for (const auto& imageView : *m_pSwapChainImageViews)
 		vkDestroyImageView(m_pLogicalDevice, imageView, nullptr);
