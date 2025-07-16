@@ -166,6 +166,7 @@
     <ClCompile Include="Engine\Lordi.cpp" />
     <ClCompile Include="Engine\Graphics.cpp" />
     <ClCompile Include="Engine\Settings.cpp" />
+    <ClCompile Include="Engine\Utility.cpp" />
     <ClCompile Include="main.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -173,6 +174,12 @@
     <ClInclude Include="Engine\Graphics.h" />
     <ClInclude Include="Engine\Logger.h" />
     <ClInclude Include="Engine\Settings.h" />
+    <ClInclude Include="Engine\Utility.h" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="Engine\Shaders\compile.bat" />
+    <None Include="Engine\Shaders\shader.frag" />
+    <None Include="Engine\Shaders\shader.vert" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

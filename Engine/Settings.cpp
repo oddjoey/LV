@@ -9,7 +9,7 @@ std::shared_ptr<Settings> Settings::Get()
 	return _instance;
 }
 
-bool Settings::ValidateSettings(const GraphicsSettings_t& settings)
+bool Settings::ValidateSettings(const GraphicsSettings& settings)
 {
 	LOG_INFO("Validating Graphics settings...");
 
@@ -31,7 +31,7 @@ bool Settings::ValidateSettings(const GraphicsSettings_t& settings)
 	return true;
 }
 
-void Settings::SetSettings(const GraphicsSettings_t& settings)
+void Settings::SetSettings(const GraphicsSettings& settings)
 {
 	LOG_INFO("Setting Graphics settings...");
 
@@ -42,7 +42,7 @@ void Settings::SetSettings(const GraphicsSettings_t& settings)
 	}
 }
 
-GraphicsSettings_t Settings::GetGraphicsSettings() const
+GraphicsSettings Settings::GetGraphicsSettings() const
 {
 	return m_tSettings;
 }

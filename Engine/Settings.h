@@ -13,23 +13,31 @@ enum class VSyncOptions
 	MAILBOX
 };
 
-struct GraphicsSettings_t
+enum class ColorBlendingOptions
 {
-	GraphicsSettings_t Defaults() const
+	NONE,
+	MIX,
+	BITWISE
+};
+
+struct GraphicsSettings
+{
+	GraphicsSettings Defaults() const
 	{
-		GraphicsSettings_t defaultSettings = {};
+		GraphicsSettings defaultSettings = {};
 		defaultSettings.m_sWindowName = "Lordi Engine";
 		defaultSettings.m_uiWindowWidth = 1280;
 		defaultSettings.m_uiWindowHeight = 720;
 		defaultSettings.m_VSyncOption = VSyncOptions::ENABLED;
+		defaultSettings.m_ColorBlendingOption = ColorBlendingOptions::NONE;
 		return defaultSettings;
 	}
 	bool Empty() const
 	{
-		GraphicsSettings_t emptySettings = {};
+		GraphicsSettings emptySettings = {};
 		return *this == emptySettings;
 	}
-	bool operator==(const GraphicsSettings_t& other) const
+	bool operator==(const GraphicsSettings& other) const
 	{
 		return m_sWindowName == other.m_sWindowName &&
 			   m_uiWindowWidth == other.m_uiWindowWidth &&
@@ -40,7 +48,8 @@ struct GraphicsSettings_t
 	std::string m_sWindowName = "";
 	unsigned int m_uiWindowWidth = 0;
 	unsigned int m_uiWindowHeight = 0;
-	VSyncOptions m_VSyncOption = {};
+	VSyncOptions m_VSyncOption = VSyncOptions::NONE;
+	ColorBlendingOptions m_ColorBlendingOption = ColorBlendingOptions::NONE;
 };
 
 class Settings
@@ -57,11 +66,11 @@ public:
 	Settings(const Settings&) = delete;
 	Settings& operator=(const Settings& r) = delete;
 
-	bool ValidateSettings(const GraphicsSettings_t& settings);
+	bool ValidateSettings(const GraphicsSettings& settings);
 
-	void SetSettings(const GraphicsSettings_t& settings);
+	void SetSettings(const GraphicsSettings& settings);
 
-	GraphicsSettings_t GetGraphicsSettings() const;
+	GraphicsSettings GetGraphicsSettings() const;
 private:
-	GraphicsSettings_t m_tSettings = {};
+	GraphicsSettings m_tSettings = {};
 };

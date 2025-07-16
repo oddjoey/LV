@@ -1,13 +1,13 @@
 #include "Graphics.h"
 
-std::shared_ptr<Graphics> Graphics::_instance = nullptr;
+std::shared_ptr<Graphics> Graphics::s_pInstance = nullptr;
 
 std::shared_ptr<Graphics> Graphics::Get()
 {
-    if (_instance == nullptr)
-        _instance = std::shared_ptr<Graphics>(new Graphics());
+    if (s_pInstance == nullptr)
+        s_pInstance = std::shared_ptr<Graphics>(new Graphics());
 
-    return _instance;
+    return s_pInstance;
 }
 
 Graphics::Graphics()
@@ -43,6 +43,7 @@ void Graphics::Initialize()
     CreateLogicalDevice();
     CreateSwapChain();
 	CreateImageViews();
+    CreateGraphicsPipeline();
 
     LOG_SUCCESS("Graphics initialized successfully!");
 }
@@ -75,8 +76,8 @@ void Graphics::CreateVulkanInstance()
 #ifdef _DEBUG
     newExtensions->push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
 
-    instanceCreateInfo.enabledLayerCount = static_cast<uint32_t>(c_RequiredValidationLayers.size());
-    instanceCreateInfo.ppEnabledLayerNames = c_RequiredValidationLayers.data();
+    instanceCreateInfo.enabledLayerCount = static_cast<uint32_t>(cRequiredValidationLayers.size());
+    instanceCreateInfo.ppEnabledLayerNames = cRequiredValidationLayers.data();
 
     m_DebugCreateInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
     m_DebugCreateInfo.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
@@ -189,14 +190,14 @@ void Graphics::CreateLogicalDevice()
     deviceCreateInfo.pQueueCreateInfos = queueCreateInfos.data(); // pointer to the queue create infos
 	deviceCreateInfo.pEnabledFeatures = &deviceFeatures; // pointer to the enabled features
 
-    deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(c_RequiredDeviceExtensions.size());
-    deviceCreateInfo.ppEnabledExtensionNames = c_RequiredDeviceExtensions.data();
+    deviceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(cRequiredDeviceExtensions.size());
+    deviceCreateInfo.ppEnabledExtensionNames = cRequiredDeviceExtensions.data();
 
     deviceCreateInfo.enabledLayerCount = 0;
 
 #ifdef _DEBUG
-    deviceCreateInfo.enabledLayerCount = static_cast<uint32_t>(c_RequiredValidationLayers.size());
-    deviceCreateInfo.ppEnabledLayerNames = c_RequiredValidationLayers.data();
+    deviceCreateInfo.enabledLayerCount = static_cast<uint32_t>(cRequiredValidationLayers.size());
+    deviceCreateInfo.ppEnabledLayerNames = cRequiredValidationLayers.data();
 #endif // _DEBUG
 
     if (vkCreateDevice(m_pPhysicalDevice, &deviceCreateInfo, nullptr, &m_pLogicalDevice) != VK_SUCCESS)
@@ -372,6 +373,196 @@ void Graphics::CreateImageViews()
 	LOG_SUCCESS("Image views for swap chain images created successfully!");
 }
 
+void Graphics::CreateGraphicsPipeline()
+{
+	LOG_INFO("Creating graphics pipeline...");
+
+	// read the compiled shader byte code from files
+	auto fragShaderCode = Utility::ReadFile("Engine/Shaders/Compiled/frag.spv");
+	auto vertShaderCode = Utility::ReadFile("Engine/Shaders/Compiled/vert.spv");
+
+	// create shader modules from the byte code
+	VkShaderModuleCreateInfo fragShaderInfo = {};
+	fragShaderInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	fragShaderInfo.codeSize = fragShaderCode.size();
+	fragShaderInfo.pCode = reinterpret_cast<const uint32_t*>(fragShaderCode.data());
+
+	if (vkCreateShaderModule(m_pLogicalDevice, &fragShaderInfo, nullptr, &m_pFragmentShaderModule) != VK_SUCCESS)
+		throw std::runtime_error("failed to create fragment shader module!");
+
+	VkShaderModuleCreateInfo vertShaderInfo = {};
+	vertShaderInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+	vertShaderInfo.codeSize = vertShaderCode.size();
+	vertShaderInfo.pCode = reinterpret_cast<const uint32_t*>(vertShaderCode.data());
+
+    if (vkCreateShaderModule(m_pLogicalDevice, &vertShaderInfo, nullptr, &m_pVertexShaderModule) != VK_SUCCESS)
+		throw std::runtime_error("failed to create vertex shader module!");
+
+	// create shader stages for the graphics pipeline
+	VkPipelineShaderStageCreateInfo vertShaderStageInfo = {};
+	vertShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    // vertex shader stage
+	vertShaderStageInfo.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    // shader module
+	vertShaderStageInfo.module = m_pVertexShaderModule;
+    // entry point of the shader
+	vertShaderStageInfo.pName = "main"; 
+	// specialization info is used to pass constants to the shader at compile time
+	vertShaderStageInfo.pSpecializationInfo = nullptr;
+
+	VkPipelineShaderStageCreateInfo fragShaderStageInfo = {};
+    fragShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+	// fragment shader stage
+	fragShaderStageInfo.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+	// shader module
+	fragShaderStageInfo.module = m_pFragmentShaderModule;
+	// entry point of the shader
+	fragShaderStageInfo.pName = "main";
+	// specialization info is used to pass constants to the shader at compile time
+	fragShaderStageInfo.pSpecializationInfo = nullptr;
+
+	// dynamic states are states that can be changed at runtime
+    std::vector<VkDynamicState> dynamicStates = {
+        VK_DYNAMIC_STATE_VIEWPORT, // viewport can be changed at runtime
+        VK_DYNAMIC_STATE_SCISSOR // scissor can be changed at runtime
+    };
+	VkPipelineDynamicStateCreateInfo dynamicStateInfo = {};
+	dynamicStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+	dynamicStateInfo.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
+	dynamicStateInfo.pDynamicStates = dynamicStates.data();
+
+	// vertex input state describes the format of the vertex data
+    VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
+    vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+    vertexInputInfo.vertexBindingDescriptionCount = 0;
+    vertexInputInfo.pVertexBindingDescriptions = nullptr;
+    vertexInputInfo.vertexAttributeDescriptionCount = 0;
+    vertexInputInfo.pVertexAttributeDescriptions = nullptr;
+
+	// input assembly state describes how the vertex data is assembled into primitives
+	// primitives are the basic building blocks of the graphics pipeline, e.g. points, lines, triangles
+    VkPipelineInputAssemblyStateCreateInfo inputAssemblyInfo = {};
+    inputAssemblyInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
+    inputAssemblyInfo.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    inputAssemblyInfo.primitiveRestartEnable = VK_FALSE;
+
+	// viewport specifications (region of framebuffer to render to)
+    VkViewport viewport = {};
+	viewport.x = 0.0f; // x position of the viewport
+	viewport.y = 0.0f; // y position of the viewport
+	viewport.width = static_cast<float>(m_SwapChainCreateInfo.imageExtent.width); // width of the viewport
+	viewport.height = static_cast<float>(m_SwapChainCreateInfo.imageExtent.height); // height of the viewport
+	viewport.minDepth = 0.0f; // minimum depth of the viewport
+	viewport.maxDepth = 1.0f; // maximum depth of the viewport
+
+	// scissor specifications (region of framebuffer to keep, used for clipping)
+	VkRect2D scissor = {};
+	scissor.offset = { 0, 0 }; // offset of the scissor rectangle
+	scissor.extent = m_SwapChainCreateInfo.imageExtent; // size of the scissor rectangle
+
+	// viewport state describes the viewport and scissor rectangles, since dynamic states are used, we only need to specify the count
+	VkPipelineViewportStateCreateInfo viewportStateInfo = {};
+	viewportStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+	viewportStateInfo.viewportCount = 1; // number of viewports
+	viewportStateInfo.scissorCount = 1; // number of scissors
+
+	// rasterization state describes how the primitives are rasterized (converted to pixels)
+	VkPipelineRasterizationStateCreateInfo rasterizerInfo = {};
+	rasterizerInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+    // should fragments that are beyond the near and far planes be clamped
+    // TO-DO: If true, a GPU feature needs to be enabled
+	rasterizerInfo.depthClampEnable = VK_FALSE;
+    // disable output to framebuffer (geometry never passes through the rasterizer)
+	rasterizerInfo.rasterizerDiscardEnable = VK_FALSE;
+	// specifies how the primitives are drawn, e.g.
+	// VK_POLYGON_MODE_FILL for filled triangles,
+	// VK_POLYGON_MODE_LINE for wireframe triangles, and
+	// VK_POLYGON_MODE_POINT for points
+	// TO-DO: Anything other than VK_POLYGON_MODE_FILL requires a GPU feature to be enabled
+	rasterizerInfo.polygonMode = VK_POLYGON_MODE_FILL; // fill mode
+    // line width in fragments
+	// TO-DO: if thicker than 1.0f, a GPU feature (wideLines) needs to be enabled
+	rasterizerInfo.lineWidth = 1.0f; // line width
+	// specifies how the triangles are culled, e.g.
+	// VK_CULL_MODE_NONE for no culling,
+	// VK_CULL_MODE_FRONT_BIT for front face culling,
+	// VK_CULL_MODE_BACK_BIT for back face culling, and
+	// VK_CULL_MODE_FRONT_AND_BACK for both front and back face culling
+	rasterizerInfo.cullMode = VK_CULL_MODE_BACK_BIT; // back face culling
+	// specifies the front face of the triangles, e.g.
+	// VK_FRONT_FACE_COUNTER_CLOCKWISE for counter-clockwise front face,
+	// VK_FRONT_FACE_CLOCKWISE for clockwise front face
+	rasterizerInfo.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE; // counter-clockwise front face
+	// specifies if depth bias is enabled, used for shadow mapping to avoid shadow acne
+	rasterizerInfo.depthBiasEnable = VK_FALSE; // depth bias is disabled
+	rasterizerInfo.depthBiasConstantFactor = 0.0f; // constant factor for depth bias
+	rasterizerInfo.depthBiasClamp = 0.0f; // clamp for depth bias
+	rasterizerInfo.depthBiasSlopeFactor = 0.0f; // slope factor for depth bias
+
+	// multisampling state describes how the fragments are sampled, e.g. anti-aliasing
+	// multisampling is used to reduce aliasing artifacts in the rendered image
+	// works by sampling multiple fragments per pixel and averaging the results
+	// TO-DO: If multisampling is enabled, GPU feature (sampleRateShading) needs to be enabled
+    VkPipelineMultisampleStateCreateInfo multisamplingInfo = {};
+    multisamplingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+    multisamplingInfo.sampleShadingEnable = VK_FALSE;
+    multisamplingInfo.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+    multisamplingInfo.minSampleShading = 1.0f;
+    multisamplingInfo.pSampleMask = nullptr;
+    multisamplingInfo.alphaToCoverageEnable = VK_FALSE;
+    multisamplingInfo.alphaToOneEnable = VK_FALSE;
+
+	// depth stencil state describes how the depth and stencil buffers are used
+	// VkPipelineDepthStencilStateCreateInfo depthStencilInfo = {};
+
+	auto settings = Settings::Get()->GetGraphicsSettings();
+    if (settings.Empty())
+    {
+        LOG_WARNING("Graphics settings are empty, using default values...");
+        settings = settings.Defaults();
+    }
+
+	// color blending state describes how the colors of the fragments are blended with the colors of the framebuffer.
+	// attachment state describes how the color attachment is blended for each framebuffer
+	VkPipelineColorBlendAttachmentState colorBlendAttachment = {};
+    colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | VK_COLOR_COMPONENT_G_BIT | VK_COLOR_COMPONENT_B_BIT | VK_COLOR_COMPONENT_A_BIT;
+    colorBlendAttachment.blendEnable = settings.m_ColorBlendingOption == ColorBlendingOptions::MIX ? VK_TRUE : VK_FALSE;
+    colorBlendAttachment.srcColorBlendFactor = VK_BLEND_FACTOR_SRC_ALPHA;
+    colorBlendAttachment.dstColorBlendFactor = VK_BLEND_FACTOR_ONE_MINUS_SRC_ALPHA;
+    colorBlendAttachment.colorBlendOp = VK_BLEND_OP_ADD;
+    colorBlendAttachment.srcAlphaBlendFactor = VK_BLEND_FACTOR_ONE;
+    colorBlendAttachment.dstAlphaBlendFactor = VK_BLEND_FACTOR_ZERO;
+    colorBlendAttachment.alphaBlendOp = VK_BLEND_OP_ADD;
+
+	// global color blending settings
+    VkPipelineColorBlendStateCreateInfo colorBlendStateInfo = {};
+    colorBlendStateInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+    colorBlendStateInfo.logicOpEnable = settings.m_ColorBlendingOption == ColorBlendingOptions::BITWISE ? VK_TRUE : VK_FALSE;
+    colorBlendStateInfo.logicOp = VK_LOGIC_OP_COPY;
+    colorBlendStateInfo.attachmentCount = 1;
+    colorBlendStateInfo.pAttachments = &colorBlendAttachment;
+    colorBlendStateInfo.blendConstants[0] = 0.0f;
+    colorBlendStateInfo.blendConstants[1] = 0.0f;
+    colorBlendStateInfo.blendConstants[2] = 0.0f;
+    colorBlendStateInfo.blendConstants[3] = 0.0f;
+
+	VkPipelineLayoutCreateInfo pipelineLayoutInfo = {};
+	pipelineLayoutInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+	pipelineLayoutInfo.setLayoutCount = 0; // no descriptor sets
+	pipelineLayoutInfo.pSetLayouts = nullptr; // no descriptor sets
+	pipelineLayoutInfo.pushConstantRangeCount = 0; // no push constants
+	pipelineLayoutInfo.pPushConstantRanges = nullptr; // no push constants
+
+	if (vkCreatePipelineLayout(m_pLogicalDevice, &pipelineLayoutInfo, nullptr, &m_pPipelineLayout) != VK_SUCCESS)
+		throw std::runtime_error("failed to create pipeline layout!");
+
+    // cleanup shader modules
+	vkDestroyShaderModule(m_pLogicalDevice, m_pFragmentShaderModule, nullptr);
+	vkDestroyShaderModule(m_pLogicalDevice, m_pVertexShaderModule, nullptr);
+
+	LOG_SUCCESS("Graphics pipeline created successfully!");
+}
+
 void Graphics::CreateWindowSurface()
 {
 	LOG_INFO("Creating window surface...");
@@ -507,7 +698,7 @@ bool Graphics::IsDeviceSuitable(const VkPhysicalDevice& device)
     auto availableExtensions = std::make_unique<std::vector<VkExtensionProperties>>(extensionCount);
     vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, availableExtensions->data());
 
-    std::set<std::string> requiredExtensions(c_RequiredDeviceExtensions.begin(), c_RequiredDeviceExtensions.end());
+    std::set<std::string> requiredExtensions(cRequiredDeviceExtensions.begin(), cRequiredDeviceExtensions.end());
     for (const auto& extension : *availableExtensions) {
         requiredExtensions.erase(extension.extensionName);
     }
@@ -596,16 +787,24 @@ void Graphics::CleanupVulkan()
 {
 	LOG_INFO("Cleaning up Vulkan...");
 
+	if (m_pPipelineLayout != nullptr)
+		vkDestroyPipelineLayout(m_pLogicalDevice, m_pPipelineLayout, nullptr);
+
     for (const auto& imageView : *m_pSwapChainImageViews)
 		vkDestroyImageView(m_pLogicalDevice, imageView, nullptr);
+
     if (m_pSwapChain != nullptr)
         vkDestroySwapchainKHR(m_pLogicalDevice, m_pSwapChain, nullptr);
+
 	if (m_pLogicalDevice != nullptr)
 	    vkDestroyDevice(m_pLogicalDevice, nullptr);
+
 	if (m_pWindow != nullptr)
 		glfwDestroyWindow(m_pWindow);
+
     if (m_pWindowSurface != nullptr)
         vkDestroySurfaceKHR(m_pInstance, m_pWindowSurface, nullptr);
+
 	if (m_pInstance != nullptr)
         vkDestroyInstance(m_pInstance, nullptr);
 
@@ -647,7 +846,7 @@ void Graphics::CleanupDebugger()
 bool Graphics::IsDebugSupported()
 {
 	LOG_INFO("Checking if debug is supported...");
-    for (const auto& layerName : c_RequiredValidationLayers)
+    for (const auto& layerName : cRequiredValidationLayers)
         if (!IsLayerPresent(layerName))
         {
             LOG_FATAL("Layer not found: " + std::string(layerName));

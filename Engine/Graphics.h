@@ -12,6 +12,7 @@
 #include <set>			// std::set
 #include <algorithm>	// std::clamp
 
+#include "Utility.h"
 #include "Logger.h"
 #include "Settings.h"
 
@@ -77,7 +78,7 @@
 
 			- We specify swap chain image count aswell.
 
-	[] 8. Create image views for the swap chain images.
+	[done!] 8. Create image views for the swap chain images.
 
 	 		- Wrap the swap chain into image views to be drawn to the screen.
 
@@ -117,47 +118,43 @@
 
 class Graphics
 {
-	friend class Lordi;
 	// instance of cGraphics, used as a singleton (single instance throughout the application)
-	static std::shared_ptr<Graphics> _instance;
-	Graphics();
 	// returns the instance of Graphics, creates it if it doesn't exist
-	static std::shared_ptr<Graphics> Get();
 public:
 	void Initialize();
 	~Graphics();
+
 	// delete move/copy
 	Graphics(const Graphics&) = delete;
 	Graphics operator=(const Graphics& r) = delete;
 private:
+	Graphics();
+	static std::shared_ptr<Graphics> Get();
+
 	bool IsDebugSupported();
 	void InitializeDebugger();
 	void CleanupDebugger();
 	static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
-
 	void InitializeWindow();
 	void CreateWindowSurface();
-
 	void CreateVulkanInstance();
 	void CleanupVulkan();
-
 	void GetVulkanData();
 	bool IsLayerPresent(const std::string& layerName);
 	bool IsExtensionPresent(const std::string& extensionName);
-
-	// Check if the physical device is suitable for our needs
 	bool IsDeviceSuitable(const VkPhysicalDevice& device);
-	// Pick a physical device that supports the required features and queues
 	void PickPhysicalDevice();
-	// Create logical device, used to interface with the physical device
-	// Describes the queues and features that the logical device will support
 	void CreateLogicalDevice();
-	// Create swap chain, used to manage the images that will be presented to the surface
 	void CreateSwapChain();
 	void CreateImageViews();
-private:
-	const std::vector<const char*> c_RequiredValidationLayers = { "VK_LAYER_KHRONOS_validation" };
-	const std::vector<const char*> c_RequiredDeviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+	void CreateGraphicsPipeline();
+
+	friend class Lordi;
+
+	static std::shared_ptr<Graphics> s_pInstance;
+
+	const std::vector<const char*> cRequiredValidationLayers = { "VK_LAYER_KHRONOS_validation" };
+	const std::vector<const char*> cRequiredDeviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 	
 	GLFWwindow* m_pWindow = nullptr;
 
@@ -211,8 +208,16 @@ private:
 	VkSwapchainKHR m_pSwapChain = nullptr;
 	// Swap chain image handles
 	std::unique_ptr<std::vector<VkImage>> m_pSwapChainImages = nullptr;
-
+	// Swap chain image views, used to access the swap chain images
 	std::unique_ptr<std::vector<VkImageView>> m_pSwapChainImageViews = nullptr;
+
+	// Vertex shader module
+	VkShaderModule m_pVertexShaderModule = nullptr;
+	// Fragment shader module
+	VkShaderModule m_pFragmentShaderModule = nullptr;
+
+	// Pipeline layout, describes the layout of the pipeline, e.g. descriptor sets, push constants, etc.
+	VkPipelineLayout m_pPipelineLayout = nullptr;
 
 	// Window surface, the area where the swap chain images will be presented
 	VkSurfaceKHR m_pWindowSurface = nullptr;
