@@ -45,6 +45,7 @@ void Graphics::Initialize()
 	CreateImageViews();
 	CreateRenderPass();
     CreateGraphicsPipeline();
+    CreateFrameBuffers();
 
     LOG_SUCCESS("Graphics initialized successfully!");
 }
@@ -225,13 +226,11 @@ void Graphics::CreateSwapChain()
             break;
         }
 
-    // presentation mode of the swap chain
-    VkPresentModeKHR swapChainPresentMode = VK_PRESENT_MODE_FIFO_KHR;
     // surface present mode specifications (how images are presented to the surface) (VSync)
-    VkPresentModeKHR userPresentMode = VK_PRESENT_MODE_FIFO_KHR; // default to FIFO (VSync)
-
+    VkPresentModeKHR swapChainPresentMode = VK_PRESENT_MODE_FIFO_KHR;
+    
 	auto settings = Settings::Get()->GetGraphicsSettings();
-
+    VkPresentModeKHR userPresentMode = VK_PRESENT_MODE_FIFO_KHR; // default to FIFO (VSync)
     switch (settings.m_VSyncOption)
     {
         case VSyncOptions::NONE:
@@ -375,22 +374,25 @@ void Graphics::CreateRenderPass()
 {
     LOG_INFO("Creating render pass...");
 
-    // Render pass is a collection of attachments (images) and subpasses (rendering operations)
+    // Render pass is a collection of attachments (buffers) and subpasses (rendering operations)
     // It defines how images are used during rendering
     VkAttachmentDescription colorAttachment = {};
     colorAttachment.format = m_SwapChainCreateInfo.imageFormat; // format of the color attachment
     colorAttachment.samples = VK_SAMPLE_COUNT_1_BIT; // number of samples per pixel (1 for no multisampling)
+
     // what to do with data in attachment before rendering
     // VK_ATTACHMENT_LOAD_OP_LOAD (preserves  data in attachment)
     // VK_ATTACHMENT_LOAD_OP_CLEAR (clears data in attachment)
     // VK_ATTACHMENT_LOAD_OP_DONT_CARE (ignores the data in the attachment)
     colorAttachment.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR; // clear the attachment before rendering
+
 	// what to do with data in attachment after rendering
 	// VK_ATTACHMENT_STORE_OP_STORE stores the data in the attachment in memory to be used later
 	// VK_ATTACHMENT_STORE_OP_DONT_CARE ignores the data in the attachment, data is not preserved
     colorAttachment.storeOp = VK_ATTACHMENT_STORE_OP_STORE; // store the attachment after rendering
     colorAttachment.stencilLoadOp = VK_ATTACHMENT_LOAD_OP_DONT_CARE; // no stencil buffer
     colorAttachment.stencilStoreOp = VK_ATTACHMENT_STORE_OP_DONT_CARE; // no stencil buffer
+
     // VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL 
     //  -   images used as color attachments during rendering
     // VK_IMAGE_LAYOUT_PRESENT_SRC_KHR
@@ -482,7 +484,9 @@ void Graphics::CreateGraphicsPipeline()
 	// specialization info is used to pass constants to the shader at compile time
 	fragShaderStageInfo.pSpecializationInfo = nullptr;
 
-	// dynamic states are states that can be changed at runtime
+    VkPipelineShaderStageCreateInfo shaderStages[] = { vertShaderStageInfo, fragShaderStageInfo };
+	
+    // dynamic states are states that can be changed at runtime
     std::vector<VkDynamicState> dynamicStates = {
         VK_DYNAMIC_STATE_VIEWPORT, // viewport can be changed at runtime
         VK_DYNAMIC_STATE_SCISSOR // scissor can be changed at runtime
@@ -611,12 +615,59 @@ void Graphics::CreateGraphicsPipeline()
 
 	if (vkCreatePipelineLayout(m_pLogicalDevice, &pipelineLayoutInfo, nullptr, &m_pPipelineLayout) != VK_SUCCESS)
 		throw std::runtime_error("failed to create pipeline layout!");
+    
+    VkGraphicsPipelineCreateInfo pipelineInfo = {};
+    pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+    pipelineInfo.stageCount = 2;
+    pipelineInfo.pStages = shaderStages;
+    pipelineInfo.pVertexInputState = &vertexInputInfo;
+    pipelineInfo.pInputAssemblyState = &inputAssemblyInfo;
+    pipelineInfo.pViewportState = &viewportStateInfo;
+    pipelineInfo.pRasterizationState = &rasterizerInfo;
+    pipelineInfo.pMultisampleState = &multisamplingInfo;
+    pipelineInfo.pDepthStencilState = nullptr;
+    pipelineInfo.pColorBlendState = &colorBlendStateInfo;
+    pipelineInfo.pDynamicState = &dynamicStateInfo;
+    pipelineInfo.layout = m_pPipelineLayout;
+    pipelineInfo.renderPass = m_pRenderPass;
+    pipelineInfo.subpass = 0;
+    pipelineInfo.basePipelineHandle = VK_NULL_HANDLE;
+    pipelineInfo.basePipelineIndex = -1;
+
+	if (vkCreateGraphicsPipelines(m_pLogicalDevice, VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_pGraphicsPipeline) != VK_SUCCESS)
+		throw std::runtime_error("failed to create graphics pipeline!");
 
     // cleanup shader modules
 	vkDestroyShaderModule(m_pLogicalDevice, m_pFragmentShaderModule, nullptr);
 	vkDestroyShaderModule(m_pLogicalDevice, m_pVertexShaderModule, nullptr);
 
 	LOG_SUCCESS("Graphics pipeline created successfully!");
+}
+
+void Graphics::CreateFrameBuffers()
+{
+    LOG_INFO("Creating frame buffers...");
+
+    auto frameBuffers = std::make_unique<std::vector<VkFramebuffer>>(m_pSwapChainImageViews->size());
+
+    for (auto i = 0; i < m_pSwapChainImageViews->size(); i++)
+    {
+        VkFramebufferCreateInfo framebufferInfo = {};
+        framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+        framebufferInfo.renderPass = m_pRenderPass;
+        framebufferInfo.attachmentCount = 1;
+        framebufferInfo.pAttachments = &m_pSwapChainImageViews->data()[i];
+        framebufferInfo.width = m_SwapChainCreateInfo.imageExtent.width;
+        framebufferInfo.height = m_SwapChainCreateInfo.imageExtent.height;
+        framebufferInfo.layers = 1;
+
+        if (vkCreateFramebuffer(m_pLogicalDevice, &framebufferInfo, nullptr, &frameBuffers->data()[i]) != VK_SUCCESS)
+            throw std::runtime_error("failed to create framebuffer!");
+    }
+
+	m_pFrameBuffers.swap(frameBuffers);
+
+	LOG_SUCCESS("Frame buffers created successfully!");
 }
 
 void Graphics::CreateWindowSurface()
@@ -837,6 +888,12 @@ void Graphics::InitializeWindow()
 void Graphics::CleanupVulkan()
 {
 	LOG_INFO("Cleaning up Vulkan...");
+
+	for (const auto& framebuffer : *m_pFrameBuffers)
+		vkDestroyFramebuffer(m_pLogicalDevice, framebuffer, nullptr);
+    
+	if (m_pGraphicsPipeline != nullptr)
+		vkDestroyPipeline(m_pLogicalDevice, m_pGraphicsPipeline, nullptr);
 
 	if (m_pPipelineLayout != nullptr)
 		vkDestroyPipelineLayout(m_pLogicalDevice, m_pPipelineLayout, nullptr);

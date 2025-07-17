@@ -149,6 +149,7 @@ private:
 	void CreateImageViews();
 	void CreateRenderPass();
 	void CreateGraphicsPipeline();
+	void CreateFrameBuffers();
 
 	friend class Lordi;
 
@@ -220,6 +221,13 @@ private:
 	VkRenderPass m_pRenderPass = nullptr;
 	// Pipeline layout, describes the layout of the pipeline, e.g. descriptor sets, push constants, etc.
 	VkPipelineLayout m_pPipelineLayout = nullptr;
+	VkPipeline m_pGraphicsPipeline = nullptr;
+
+	// Framebuffers for the swap chain images, used to render to the swap chain images
+	std::unique_ptr<std::vector<VkFramebuffer>> m_pFrameBuffers = nullptr;
+
+	// Command pool for managing command buffers
+	VkCommandPool m_pCommandPool = nullptr; 
 
 	// Window surface, the area where the swap chain images will be presented
 	VkSurfaceKHR m_pWindowSurface = nullptr;
