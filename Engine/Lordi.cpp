@@ -43,7 +43,10 @@ void Lordi::MainLoop()
 	while (!glfwWindowShouldClose(GetGraphics()->m_pWindow))
 	{
 		glfwPollEvents();
+		GetGraphics()->DrawFrame();
 	}
+
+	vkDeviceWaitIdle(GetGraphics()->m_pLogicalDevice);
 }
 
 std::shared_ptr<Graphics> Lordi::GetGraphics() const

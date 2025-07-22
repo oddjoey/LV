@@ -86,33 +86,51 @@
 
 				- e.g 2D texture, mipmap, cube map, etc.
 
-	[] 9. Create a framebuffer.
+	[done!] 9 Create a render pass to define how the images will be rendered.
 
-	 		- Used for referencing image views for color, depth, and stencil attachments.
+	 		- A collection of rendering operations on attachments (like color and depth),
+			defined in stages. It sets the structure for what happens each frame.
 
-	[] 10 Create a render pass to define how the images will be rendered.
+			- Subdivisions within a render pass that allow rendering in stages (like shadow pass, then lighting).
+			They help optimize memory access.
 
-	 		- Descrive type of images used, how they will be used, and how their contents should be handled during rendering.
+	[done!] 10. Create a graphics pipeline to define how the triangle will be drawn.
 
-	[] 11. Create a graphics pipeline to define how the triangle will be drawn.
+			- The full configuration of shaders, states (blend, rasterization, etc.),
+			and input/output formats that define how rendering happens
 
 	 		- Describes config of GPU, e.g. viewport size, shaders to use, input assembly, rasterization, etc.
 
 	 		- Different shaders/vertlex layout require different pipelines.
 
-	[] 12. Create a command pool to manage command buffers.
+	[done!] 11. Create a framebuffer.
+
+	 		- A collection of attachments (image views) that are used during a render pass to store output (color, depth, etc.).
+
+	[done!] 12. Create a command pool to manage command buffers.
 
 	 		- Command pool is used to allocate and free command buffers.
 
-	[] 13. Create command buffers to record the drawing commands.
+			- A memory manager for command buffers. It ensures allocation is efficient and thread-safe.
+
+	[done!] 13. Create command buffers to record the drawing commands.
+
+			- Sequences of GPU instructions (draw calls, binding resources) recorded once and submitted many times.
 
 	 		- Queue operations are recordered first into command buffers, which are then submitted to the queue for execution.
 
-	[] 14. Submit the command buffers to the graphics queue for execution.
+		[] 14. Create synchronization objects (semaphores and fences) to synchronize the rendering process.
 
-	[] 15. Present the rendered images to the surface.
+			- GPU-GPU sync primitives used to control the order of operations—e.g.,
+			waiting until image acquisition is complete before rendering starts.
 
-	[] 16. Cleanup resources when done.
+			- CPU-GPU sync tools—used to wait for GPU work to finish (like finishing a frame before starting the next).
+
+	[] 15. Submit the command buffers to the graphics queue for execution.
+
+	[] 16. Present the rendered images to the surface.
+
+	[] 17. Cleanup resources when done.
 */
 
 
@@ -150,10 +168,17 @@ private:
 	void CreateRenderPass();
 	void CreateGraphicsPipeline();
 	void CreateFrameBuffers();
+	void CreateCommandPool();
+	void CreateCommandBuffers();
+	void RecordCommandBuffer(const VkCommandBuffer& commandBuffer, uint32_t imageIndex);
+	void DrawFrame();
+	void CreateSyncObjects();
 
 	friend class Lordi;
 
 	static std::shared_ptr<Graphics> s_pInstance;
+
+	const int cMaxFramesInFlight = 2; // max number of frames in flight, used for synchronization
 
 	const std::vector<const char*> cRequiredValidationLayers = { "VK_LAYER_KHRONOS_validation" };
 	const std::vector<const char*> cRequiredDeviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
@@ -227,8 +252,17 @@ private:
 	std::unique_ptr<std::vector<VkFramebuffer>> m_pFrameBuffers = nullptr;
 
 	// Command pool for managing command buffers
-	VkCommandPool m_pCommandPool = nullptr; 
+	// Command buffers are executed by submitting them to one of the device's queues
+	VkCommandPool m_pCommandPool = nullptr;
+
+	std::unique_ptr<std::vector<VkCommandBuffer>> m_pCommandBuffers = nullptr;
 
 	// Window surface, the area where the swap chain images will be presented
 	VkSurfaceKHR m_pWindowSurface = nullptr;
+
+	// Sync objects
+	std::unique_ptr<std::vector<VkSemaphore>> m_pImageAvailableSemaphores = nullptr;
+	std::unique_ptr<std::vector<VkSemaphore>> m_pRenderFinishedSemaphores = nullptr;
+	std::unique_ptr<std::vector<VkFence>> m_pInFlightFences = nullptr;
+	uint32_t m_uiCurrentFrame = 0;
 };

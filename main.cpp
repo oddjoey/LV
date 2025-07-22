@@ -6,15 +6,16 @@ int main()
 	auto settings = lordi->GetSettings();
 
 	GraphicsSettings graphicsSettings;
-	graphicsSettings.m_sWindowName = "Lordi Engine";
-	graphicsSettings.m_uiWindowWidth = 1280;
-	graphicsSettings.m_uiWindowHeight = 720;
-	graphicsSettings.m_VSyncOption = VSyncOptions::NONE;
-	graphicsSettings.m_ColorBlendingOption = ColorBlendingOptions::NONE;
+	graphicsSettings.sWindowName = "Lordi Engine";
+	graphicsSettings.uiWindowWidth = 1280;
+	graphicsSettings.uiWindowHeight = 720;
+	graphicsSettings.eVSync = VSyncOptions::MAILBOX;
+	graphicsSettings.eColorBlending = ColorBlendingOptions::NONE;
+	graphicsSettings.eMSAA = MSAAOptions::X1;
 
 	settings->SetSettings(graphicsSettings);
 
 	lordi->Initialize();
-
-    return 0;
+	
+	return 0;
 }

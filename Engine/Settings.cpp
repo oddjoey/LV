@@ -13,13 +13,13 @@ bool Settings::ValidateSettings(const GraphicsSettings& settings)
 {
 	LOG_INFO("Validating Graphics settings...");
 
-	if (settings.m_sWindowName.empty())
+	if (settings.sWindowName.empty())
 	{
 		LOG_WARNING("Window name cannot be empty");
 		return false;
 	}
 
-	if (settings.m_uiWindowHeight <= 0 || settings.m_uiWindowWidth <= 0)
+	if (settings.uiWindowHeight <= 0 || settings.uiWindowWidth <= 0)
 	{
 		LOG_WARNING("Window size cannot be less than or equal to zero");
 		return false;
@@ -27,7 +27,7 @@ bool Settings::ValidateSettings(const GraphicsSettings& settings)
 
 	m_tSettings = settings;
 
-	LOG_SUCCESS("Graphics settings validated successfully!");
+	LOG_SUCCESS("Graphics settings validated!");
 	return true;
 }
 
@@ -44,9 +44,9 @@ void Settings::SetSettings(const GraphicsSettings& settings)
 
 GraphicsSettings Settings::GetGraphicsSettings() const
 {
-	if (m_tSettings.Empty())
+	if (m_tSettings.Empty() || !m_tSettings.Valid())
 	{
-		LOG_WARNING("Graphics settings are not set, using defaults...");
+		LOG_WARNING("Graphics settings are not set or valid, using defaults...");
 		return m_tSettings.Defaults();
 	}
 

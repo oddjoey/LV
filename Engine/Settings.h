@@ -8,7 +8,7 @@
 enum class VSyncOptions
 {
 	NONE,
-	ENABLED,
+	ENABLED, 
 	RELAXED,
 	MAILBOX
 };
@@ -20,16 +20,30 @@ enum class ColorBlendingOptions
 	BITWISE
 };
 
+enum class MSAAOptions
+{
+	X1,
+	X2,
+	X4,
+	X8,
+	X16,
+	X32,
+	X64,
+	MAX
+};
+
 struct GraphicsSettings
 {
 	GraphicsSettings Defaults() const
 	{
 		GraphicsSettings defaultSettings = {};
-		defaultSettings.m_sWindowName = "Lordi Engine";
-		defaultSettings.m_uiWindowWidth = 1280;
-		defaultSettings.m_uiWindowHeight = 720;
-		defaultSettings.m_VSyncOption = VSyncOptions::ENABLED;
-		defaultSettings.m_ColorBlendingOption = ColorBlendingOptions::NONE;
+		defaultSettings.sWindowName = "Lordi Engine";
+		defaultSettings.uiWindowWidth = 1280;
+		defaultSettings.uiWindowHeight = 720;
+		defaultSettings.eVSync = VSyncOptions::ENABLED;
+		defaultSettings.eColorBlending = ColorBlendingOptions::NONE;
+		defaultSettings.eMSAA = MSAAOptions::X1;
+
 		return defaultSettings;
 	}
 	bool Empty() const
@@ -37,19 +51,33 @@ struct GraphicsSettings
 		GraphicsSettings emptySettings = {};
 		return *this == emptySettings;
 	}
+	bool Valid() const
+	{
+		if (sWindowName.empty())
+			return false;
+		if (uiWindowHeight <= 0)
+			return false;
+		if (uiWindowWidth <= 0)
+			return false;
+		
+		return true;
+	}
 	bool operator==(const GraphicsSettings& other) const
 	{
-		return m_sWindowName == other.m_sWindowName &&
-			   m_uiWindowWidth == other.m_uiWindowWidth &&
-			   m_uiWindowHeight == other.m_uiWindowHeight &&
-			   m_VSyncOption == other.m_VSyncOption;
+		return sWindowName == other.sWindowName &&
+			uiWindowWidth == other.uiWindowWidth &&
+			uiWindowHeight == other.uiWindowHeight &&
+			eVSync == other.eVSync &&
+			eColorBlending == other.eColorBlending &&
+			eMSAA == other.eMSAA;
 	}
 
-	std::string m_sWindowName = "";
-	unsigned int m_uiWindowWidth = 0;
-	unsigned int m_uiWindowHeight = 0;
-	VSyncOptions m_VSyncOption = VSyncOptions::NONE;
-	ColorBlendingOptions m_ColorBlendingOption = ColorBlendingOptions::NONE;
+	std::string sWindowName = "";
+	unsigned int uiWindowWidth = 0;
+	unsigned int uiWindowHeight = 0;
+	VSyncOptions eVSync = VSyncOptions::NONE;
+	ColorBlendingOptions eColorBlending = ColorBlendingOptions::NONE;
+	MSAAOptions eMSAA = MSAAOptions::X1;
 };
 
 class Settings
