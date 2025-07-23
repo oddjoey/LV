@@ -6,11 +6,14 @@
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
 
+#include <glm/glm.hpp>
+
 #include <iostream>		// std::cout
 #include <vector>		// std::vector
 #include <memory>		// std::shared_ptr, std::unique_ptr
 #include <set>			// std::set
 #include <algorithm>	// std::clamp
+#include <array>		// std::array
 
 #include "Utility.h"
 #include "Logger.h"
@@ -119,25 +122,58 @@
 
 	 		- Queue operations are recordered first into command buffers, which are then submitted to the queue for execution.
 
-		[] 14. Create synchronization objects (semaphores and fences) to synchronize the rendering process.
+		[done!] 14. Create synchronization objects (semaphores and fences) to synchronize the rendering process.
 
 			- GPU-GPU sync primitives used to control the order of operations—e.g.,
 			waiting until image acquisition is complete before rendering starts.
 
 			- CPU-GPU sync tools—used to wait for GPU work to finish (like finishing a frame before starting the next).
 
-	[] 15. Submit the command buffers to the graphics queue for execution.
+	[done!] 15. Submit the command buffers to the graphics queue for execution.
 
-	[] 16. Present the rendered images to the surface.
+	[done!] 16. Present the rendered images to the surface.
 
-	[] 17. Cleanup resources when done.
+	[done!] 17. Cleanup resources when done.
 */
 
+struct Vertex
+{
+	glm::vec2 position;
+	glm::vec3 color;
+
+	static VkVertexInputBindingDescription GetBindingDescription()
+	{
+		VkVertexInputBindingDescription bindingDescription = {};
+		bindingDescription.binding = 0;
+		bindingDescription.stride = sizeof(Vertex);
+		bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+		return bindingDescription;
+	}
+
+	static std::array<VkVertexInputAttributeDescription, 2> GetAttributeDescriptions()
+	{
+		std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions = {};
+		attributeDescriptions[0].binding = 0;
+		attributeDescriptions[0].location = 0; // location in the shader
+		attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT; // position is a vec2 (2 floats)
+		attributeDescriptions[0].offset = offsetof(Vertex, position); // offset in the struct
+
+		attributeDescriptions[1].binding = 0;
+		attributeDescriptions[1].location = 1; // location in the shader
+		attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT; // color is a vec3 (3 floats)
+		attributeDescriptions[1].offset = offsetof(Vertex, color); // offset in the struct
+		return attributeDescriptions;
+	}
+};
+
+const std::vector<Vertex> vertices = {
+	{{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+	{{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
+	{{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
+};
 
 class Graphics
 {
-	// instance of cGraphics, used as a singleton (single instance throughout the application)
-	// returns the instance of Graphics, creates it if it doesn't exist
 public:
 	void Initialize();
 	~Graphics();
@@ -154,6 +190,7 @@ private:
 	void CleanupDebugger();
 	static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
 	void InitializeWindow();
+	static void FramebufferResizeCallback(GLFWwindow* window, int width, int height);
 	void CreateWindowSurface();
 	void CreateVulkanInstance();
 	void CleanupVulkan();
@@ -173,96 +210,67 @@ private:
 	void RecordCommandBuffer(const VkCommandBuffer& commandBuffer, uint32_t imageIndex);
 	void DrawFrame();
 	void CreateSyncObjects();
+	void RecreateSwapChain();
+	void CleanupSwapChain();
+	void CreateVertexBuffer();
+	uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+	void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
 
 	friend class Lordi;
 
 	static std::shared_ptr<Graphics> s_pInstance;
 
-	const int cMaxFramesInFlight = 2; // max number of frames in flight, used for synchronization
-
 	const std::vector<const char*> cRequiredValidationLayers = { "VK_LAYER_KHRONOS_validation" };
 	const std::vector<const char*> cRequiredDeviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
-	
+
+	bool m_bFramebufferResized = false;
 	GLFWwindow* m_pWindow = nullptr;
+	VkSurfaceKHR m_pWindowSurface = nullptr;
 
 	VkDebugUtilsMessengerEXT m_pDebugMessenger = nullptr;
 	VkDebugUtilsMessengerCreateInfoEXT m_DebugCreateInfo = {};
 
-	// Vulkan instance, the connection between the application and the Vulkan library
-	VkInstance m_pInstance = nullptr;
-	// Extensions are used to extend the functionality of Vulkan, each extension provides additional features or capabilities
-	// These are the ones available on the system
+	VkInstance m_pVulkanInstance = nullptr;
 	std::unique_ptr<std::vector<VkExtensionProperties>> m_pGlobalExtensions = nullptr;
-	// Validation layers (debugging functionality)
 	std::unique_ptr<std::vector<VkLayerProperties>> m_pGlobalLayers = nullptr;
 
-	// Physical device (GPU)
 	VkPhysicalDevice m_pPhysicalDevice = nullptr; 
-	// name, type, supported Vulkan version of device
 	VkPhysicalDeviceProperties m_DeviceProperties = {};
-	// optional features like texture compression, 64 bit floats and multi viewport rendering of device
 	VkPhysicalDeviceFeatures m_DeviceFeatures = {};
-	// extensions from device (essential features)
 	std::unique_ptr<std::vector<VkExtensionProperties>> m_pDeviceExtensions = nullptr;
+	std::unique_ptr<std::vector<VkQueueFamilyProperties>> m_pDeviceQueueFamilies = nullptr;
+	uint32_t m_uiDeviceGraphicsIndex = 0;
+	uint32_t m_uiDevicePresentIndex = 0;
 
-	// Queue families of the GPU, each allows a subset of commands.
-	std::unique_ptr<std::vector<VkQueueFamilyProperties>> m_pQueueFamilies = nullptr;
-	// Index of the graphics queue family
-	uint32_t m_uiGraphicsQueueFamilyIndex = 0;
-	// Index of queue that supports window surface presentation
-	uint32_t m_uiWindowPresentFamilyIndex = 0;
-
-	// Logical device is used to interface with the physical device
 	VkDevice m_pLogicalDevice = nullptr;
-	// Handle to our graphics queue to submit commands
 	VkQueue m_pGraphicsQueue = nullptr;
-	// Handle to our present queue for window surface drawing
 	VkQueue m_pPresentQueue = nullptr;
 
-	// min/max image count, min/max image dimensions
 	VkSurfaceCapabilitiesKHR m_SwapChainCapabilities = {};
-	// Supported formats for the swap chain images, e.g. format (color channels and types) and color space (sRGB, linear, etc.)
 	std::unique_ptr<std::vector<VkSurfaceFormatKHR>> m_pSwapChainFormats = nullptr;
-	// Supported presentation modes for the swap chain, e.g. FIFO, mailbox, etc.
-	// VK_PRESENT_MODE_IMMEDIATE_KHR - No VSync, images are presented immediately
-	// VK_PRESENT_MODE_FIFO_KHR - VSync, images are presented in a queue, FIFO
-	// VK_PRESENT_MODE_FIFO_RELAXED_KHR - VSync, images are presented in a queue, but can be presented earlier if the queue is empty
-	// VK_PRESENT_MODE_MAILBOX_KHR - VSync (tripple buffering), images are presented in a queue, but can be replaced by a new image 
 	std::unique_ptr<std::vector<VkPresentModeKHR>> m_pSwapChainPresentModes = nullptr;
-	// Swap chain creation info
 	VkSwapchainCreateInfoKHR m_SwapChainCreateInfo = {};
-	// Swap chain
 	VkSwapchainKHR m_pSwapChain = nullptr;
-	// Swap chain image handles
 	std::unique_ptr<std::vector<VkImage>> m_pSwapChainImages = nullptr;
-	// Swap chain image views, used to access the swap chain images
 	std::unique_ptr<std::vector<VkImageView>> m_pSwapChainImageViews = nullptr;
 
-	// Vertex shader module
 	VkShaderModule m_pVertexShaderModule = nullptr;
-	// Fragment shader module
 	VkShaderModule m_pFragmentShaderModule = nullptr;
-
+	VkSampleCountFlagBits m_eMaxMSAA = VK_SAMPLE_COUNT_1_BIT;
+	VkSampleCountFlagBits m_eUserMSAA = VK_SAMPLE_COUNT_1_BIT;
 	VkRenderPass m_pRenderPass = nullptr;
-	// Pipeline layout, describes the layout of the pipeline, e.g. descriptor sets, push constants, etc.
 	VkPipelineLayout m_pPipelineLayout = nullptr;
 	VkPipeline m_pGraphicsPipeline = nullptr;
-
-	// Framebuffers for the swap chain images, used to render to the swap chain images
 	std::unique_ptr<std::vector<VkFramebuffer>> m_pFrameBuffers = nullptr;
-
-	// Command pool for managing command buffers
-	// Command buffers are executed by submitting them to one of the device's queues
 	VkCommandPool m_pCommandPool = nullptr;
-
 	std::unique_ptr<std::vector<VkCommandBuffer>> m_pCommandBuffers = nullptr;
-
-	// Window surface, the area where the swap chain images will be presented
-	VkSurfaceKHR m_pWindowSurface = nullptr;
-
-	// Sync objects
+	
 	std::unique_ptr<std::vector<VkSemaphore>> m_pImageAvailableSemaphores = nullptr;
 	std::unique_ptr<std::vector<VkSemaphore>> m_pRenderFinishedSemaphores = nullptr;
 	std::unique_ptr<std::vector<VkFence>> m_pInFlightFences = nullptr;
+	const int cMaxFramesInFlight = 2;
 	uint32_t m_uiCurrentFrame = 0;
+
+	VkBuffer m_pVertexBuffer = nullptr;
+	VkDeviceMemory m_pVertexBufferMemory = nullptr;
 };

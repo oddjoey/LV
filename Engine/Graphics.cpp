@@ -17,9 +17,6 @@ Graphics::Graphics()
 
 Graphics::~Graphics()
 {
-#ifdef _DEBUG
-	CleanupDebugger();
-#endif // _DEBUG
 
 	CleanupVulkan();
 }
@@ -48,6 +45,7 @@ void Graphics::Initialize()
 	CreateGraphicsPipeline();
 	CreateFrameBuffers();
 	CreateCommandPool();
+	CreateVertexBuffer();
 	CreateCommandBuffers();
 	CreateSyncObjects();
 
@@ -98,7 +96,7 @@ void Graphics::CreateVulkanInstance()
 	instanceCreateInfo.enabledExtensionCount = static_cast<uint32_t>(requiredExtensions->size());
 	instanceCreateInfo.ppEnabledExtensionNames = requiredExtensions->data();
 
-	if (vkCreateInstance(&instanceCreateInfo, nullptr, &m_pInstance) != VK_SUCCESS)
+	if (vkCreateInstance(&instanceCreateInfo, nullptr, &m_pVulkanInstance) != VK_SUCCESS)
 		throw std::runtime_error("Failed to create vulkan instance");
 
 	LOG_SUCCESS("Vulkan instance created successfully!");
@@ -148,14 +146,14 @@ void Graphics::PickPhysicalDevice()
 	LOG_INFO("Picking physical device (GPU)...");
 
 	unsigned int deviceCount = 0;
-	vkEnumeratePhysicalDevices(m_pInstance, &deviceCount, nullptr);
+	vkEnumeratePhysicalDevices(m_pVulkanInstance, &deviceCount, nullptr);
 	if (deviceCount == 0)
 		throw std::runtime_error("No device found with Vulkan support");
 
 	LOG_DEBUG(deviceCount);
 
 	auto m_Devices = std::make_unique<std::vector<VkPhysicalDevice>>(deviceCount);
-	vkEnumeratePhysicalDevices(m_pInstance, &deviceCount, m_Devices->data());
+	vkEnumeratePhysicalDevices(m_pVulkanInstance, &deviceCount, m_Devices->data());
 
 	for (const auto& device : *m_Devices)
 		if (IsDeviceSuitable(device))
@@ -174,7 +172,7 @@ void Graphics::CreateLogicalDevice()
 {
 	LOG_INFO("Creating logical device...");
 	std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
-	std::set<uint32_t> uniqueQueueFamilies = { m_uiGraphicsQueueFamilyIndex, m_uiWindowPresentFamilyIndex };
+	std::set<uint32_t> uniqueQueueFamilies = { m_uiDeviceGraphicsIndex, m_uiDevicePresentIndex };
 
 	// Queue family creation
 	float queuePriority = 1.0f; // priority of the queue, higher values indicate higher priority (0.0f is lowest priority)
@@ -210,8 +208,8 @@ void Graphics::CreateLogicalDevice()
 		throw std::runtime_error("failed to create logical device!");
 
 
-	vkGetDeviceQueue(m_pLogicalDevice, m_uiGraphicsQueueFamilyIndex, 0, &m_pGraphicsQueue);
-	vkGetDeviceQueue(m_pLogicalDevice, m_uiWindowPresentFamilyIndex, 0, &m_pPresentQueue);
+	vkGetDeviceQueue(m_pLogicalDevice, m_uiDeviceGraphicsIndex, 0, &m_pGraphicsQueue);
+	vkGetDeviceQueue(m_pLogicalDevice, m_uiDevicePresentIndex, 0, &m_pPresentQueue);
 
 	LOG_SUCCESS("Logical device created successfully!");
 }
@@ -280,6 +278,7 @@ void Graphics::CreateSwapChain()
 	// surface swap extent specifications (resolution of the swap chain images)
 	if (m_SwapChainCapabilities.currentExtent.width == UINT32_MAX)
 	{
+		// get window size
 		int width, height;
 		glfwGetFramebufferSize(m_pWindow, &width, &height);
 		swapChainExtent.width = std::clamp(static_cast<uint32_t>(width), m_SwapChainCapabilities.minImageExtent.width, m_SwapChainCapabilities.maxImageExtent.width);
@@ -322,11 +321,11 @@ void Graphics::CreateSwapChain()
 	LOG_DEBUG(m_SwapChainCreateInfo.imageArrayLayers);
 	LOG_DEBUG(m_SwapChainCreateInfo.imageUsage);
 
-	if (m_uiGraphicsQueueFamilyIndex != m_uiWindowPresentFamilyIndex)
+	if (m_uiDeviceGraphicsIndex != m_uiDevicePresentIndex)
 	{
 		LOG_WARNING("Graphics queue family is different from present queue family, using concurrent mode for swap chain images.");
 		// If the graphics queue family is different from the present queue family, we need to specify the queue families
-		uint32_t queueFamilyIndices[] = { m_uiGraphicsQueueFamilyIndex, m_uiWindowPresentFamilyIndex };
+		uint32_t queueFamilyIndices[] = { m_uiDeviceGraphicsIndex, m_uiDevicePresentIndex };
 		m_SwapChainCreateInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT; // images can be shared between multiple queues
 		m_SwapChainCreateInfo.queueFamilyIndexCount = 2; // number of queue families
 		m_SwapChainCreateInfo.pQueueFamilyIndices = queueFamilyIndices; // pointer to the queue family indices
@@ -364,25 +363,25 @@ void Graphics::CreateSwapChain()
 	LOG_DEBUG(m_SwapChainCreateInfo.oldSwapchain);
 
 	if (vkCreateSwapchainKHR(m_pLogicalDevice, &m_SwapChainCreateInfo, nullptr, &m_pSwapChain) != VK_SUCCESS)
-		throw std::runtime_error("failed to create swap chain!");
+		throw std::runtime_error("failed to create swapchain!");
 
 	LOG_DEBUG("Getting swapchain image count:");
 	// Get swap chain images
 	vkGetSwapchainImagesKHR(m_pLogicalDevice, m_pSwapChain, &swapChainImageCount, nullptr);
 	if (!swapChainImageCount)
-		throw std::runtime_error("No swap chain images found!");
+		throw std::runtime_error("No swapchain images found!");
 	LOG_DEBUG(swapChainImageCount);
 
 	auto swapChainImages = std::make_unique<std::vector<VkImage>>(swapChainImageCount);
 	vkGetSwapchainImagesKHR(m_pLogicalDevice, m_pSwapChain, &swapChainImageCount, swapChainImages->data());
 	m_pSwapChainImages.swap(swapChainImages);
 
-	LOG_SUCCESS("Swap chain created successfully!");
+	LOG_SUCCESS("Swapchain created successfully!");
 }
 
 void Graphics::CreateImageViews()
 {
-	LOG_INFO("Creating image views for swap chain images...");
+	LOG_INFO("Creating image views for swapchain images...");
 
 	m_pSwapChainImageViews = std::make_unique<std::vector<VkImageView>>(m_pSwapChainImages->size());
 
@@ -409,9 +408,9 @@ void Graphics::CreateImageViews()
 		imageViewCreateInfo.subresourceRange.layerCount = 1; // number of array layers to use
 
 		if (vkCreateImageView(m_pLogicalDevice, &imageViewCreateInfo, nullptr, &m_pSwapChainImageViews->data()[i]) != VK_SUCCESS)
-			throw std::runtime_error("failed to create image view for swap chain image!");
+			throw std::runtime_error("failed to create image view for swapchain image!");
 
-		LOG_DEBUG("Created image view for swap chain image:");
+		LOG_DEBUG("Created image view for swapchain image:");
 		LOG_DEBUG(i);
 		LOG_DEBUG(imageViewCreateInfo.image);
 		LOG_DEBUG(imageViewCreateInfo.viewType);
@@ -427,7 +426,7 @@ void Graphics::CreateImageViews()
 		LOG_DEBUG(imageViewCreateInfo.subresourceRange.layerCount);
 	}
 
-	LOG_SUCCESS("Image views for swap chain images created successfully!");
+	LOG_SUCCESS("Image views for swapchain images created successfully!");
 }
 
 void Graphics::CreateRenderPass()
@@ -444,40 +443,39 @@ void Graphics::CreateRenderPass()
 
 	LOG_DEBUG("Setting multisampling for color attachment based on user's settings:");
 	auto settings = Settings::Get()->GetGraphicsSettings();
-	auto userMSAA = VK_SAMPLE_COUNT_1_BIT;
 	switch (settings.eMSAA)
 	{
 		case MSAAOptions::X1:
-			userMSAA = VK_SAMPLE_COUNT_1_BIT; // no multisampling
+			m_eUserMSAA = VK_SAMPLE_COUNT_1_BIT; // no multisampling
 			LOG_DEBUG("MSAAOptions::X1 / VK_SAMPLE_COUNT_1_BIT");
 			break;
 		case MSAAOptions::X2:
-			userMSAA = VK_SAMPLE_COUNT_2_BIT; // 2x multisampling
+			m_eUserMSAA = VK_SAMPLE_COUNT_2_BIT; // 2x multisampling
 			LOG_DEBUG("MSAAOptions::X2 / VK_SAMPLE_COUNT_2_BIT");
 			break;
 		case MSAAOptions::X4:
-			userMSAA = VK_SAMPLE_COUNT_4_BIT; // 4x multisampling
+			m_eUserMSAA = VK_SAMPLE_COUNT_4_BIT; // 4x multisampling
 			LOG_DEBUG("MSAAOptions::X4 / VK_SAMPLE_COUNT_4_BIT");
 			break;
 		case MSAAOptions::X8:
-			userMSAA = VK_SAMPLE_COUNT_8_BIT; // 8x multisampling
+			m_eUserMSAA = VK_SAMPLE_COUNT_8_BIT; // 8x multisampling
 			LOG_DEBUG("MSAAOptions::X8 / VK_SAMPLE_COUNT_8_BIT");
 			break;
 		case MSAAOptions::X16:
-			userMSAA = VK_SAMPLE_COUNT_16_BIT; // 16x multisampling
+			m_eUserMSAA = VK_SAMPLE_COUNT_16_BIT; // 16x multisampling
 			LOG_DEBUG("MSAAOptions::X16 / VK_SAMPLE_COUNT_16_BIT");
 			break;
 		case MSAAOptions::X32:
-			userMSAA = VK_SAMPLE_COUNT_32_BIT; // 32x multisampling
+			m_eUserMSAA = VK_SAMPLE_COUNT_32_BIT; // 32x multisampling
 			LOG_DEBUG("MSAAOptions::X32 / VK_SAMPLE_COUNT_32_BIT");
 			break;
 		case MSAAOptions::X64:
-			userMSAA = VK_SAMPLE_COUNT_64_BIT; // 64x multisampling
+			m_eUserMSAA = VK_SAMPLE_COUNT_64_BIT; // 64x multisampling
 			LOG_DEBUG("MSAAOptions::X64 / VK_SAMPLE_COUNT_64_BIT");
 			break;
 	}
 
-	colorAttachmentDesc.samples = userMSAA; // number of samples per pixel (multisampling)
+	colorAttachmentDesc.samples = m_eUserMSAA; // number of samples per pixel (multisampling)
 
 	// value specifying how the contents of color and depth components of the attachment are treated at the beginning of the subpass where it is first used.
 	// VK_ATTACHMENT_LOAD_OP_LOAD (preserves data)
@@ -666,14 +664,17 @@ void Graphics::CreateGraphicsPipeline()
 	LOG_DEBUG(dynamicStateInfo.dynamicStateCount);
 	LOG_DEBUG(dynamicStateInfo.pDynamicStates);
 
+	auto bindingDescription = Vertex::GetBindingDescription();
+	auto attributeDescriptions = Vertex::GetAttributeDescriptions();
+
 	LOG_DEBUG("Creating pipeline vertex input state info:");
 	// vertex input state describes the format of the vertex data
 	VkPipelineVertexInputStateCreateInfo vertexInputInfo = {};
 	vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-	vertexInputInfo.vertexBindingDescriptionCount = 0;
-	vertexInputInfo.pVertexBindingDescriptions = nullptr;
-	vertexInputInfo.vertexAttributeDescriptionCount = 0;
-	vertexInputInfo.pVertexAttributeDescriptions = nullptr;
+	vertexInputInfo.vertexBindingDescriptionCount = 1;
+	vertexInputInfo.pVertexBindingDescriptions = &bindingDescription;
+	vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
+	vertexInputInfo.pVertexAttributeDescriptions = attributeDescriptions.data();
 	LOG_DEBUG(vertexInputInfo.vertexBindingDescriptionCount);
 	LOG_DEBUG(vertexInputInfo.pVertexBindingDescriptions);
 	LOG_DEBUG(vertexInputInfo.vertexAttributeDescriptionCount);
@@ -751,7 +752,7 @@ void Graphics::CreateGraphicsPipeline()
 	VkPipelineMultisampleStateCreateInfo multisamplingInfo = {};
 	multisamplingInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
 	multisamplingInfo.sampleShadingEnable = VK_FALSE;
-	multisamplingInfo.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+	multisamplingInfo.rasterizationSamples = m_eUserMSAA;
 	multisamplingInfo.minSampleShading = 1.0f;
 	multisamplingInfo.pSampleMask = nullptr;
 	multisamplingInfo.alphaToCoverageEnable = VK_FALSE;
@@ -881,11 +882,15 @@ void Graphics::CreateFrameBuffers()
 	LOG_DEBUG(m_pSwapChainImageViews->size());
 	for (auto i = 0; i < m_pSwapChainImageViews->size(); i++)
 	{
+		VkImageView attachments[] = {
+				   m_pSwapChainImageViews->data()[i]
+		};
+
 		VkFramebufferCreateInfo framebufferInfo = {};
 		framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
 		framebufferInfo.renderPass = m_pRenderPass;
 		framebufferInfo.attachmentCount = 1;
-		framebufferInfo.pAttachments = &m_pSwapChainImageViews->data()[i];
+		framebufferInfo.pAttachments = attachments;
 		framebufferInfo.width = m_SwapChainCreateInfo.imageExtent.width;
 		framebufferInfo.height = m_SwapChainCreateInfo.imageExtent.height;
 		framebufferInfo.layers = 1;
@@ -916,7 +921,7 @@ void Graphics::CreateCommandPool()
 	// VK_COMMAND_POOL_CREATE_TRANSIENT_BIT = command buffers are rerecorded often
 	// VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT = command buffers individually rerecorded
 	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-	poolInfo.queueFamilyIndex = m_uiGraphicsQueueFamilyIndex;
+	poolInfo.queueFamilyIndex = m_uiDeviceGraphicsIndex;
 	LOG_DEBUG(poolInfo.flags);
 	LOG_DEBUG(poolInfo.queueFamilyIndex);
 
@@ -1012,11 +1017,15 @@ void Graphics::RecordCommandBuffer(const VkCommandBuffer& commandBuffer, uint32_
 	scissor.extent = m_SwapChainCreateInfo.imageExtent;
 	vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
+	VkBuffer vertexBuffers[] = { m_pVertexBuffer };
+	VkDeviceSize offsets[] = { 0 }; // offset in bytes from the start of the buffer
+	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets); // bind vertex buffer to the command buffer
+
 	// vertexCount is the number of vertices to draw (2nd parameter)
 	// instanceCount is the number of instances to draw (3rd parameter)
 	// firstVertex is the index of the first vertex to draw (4th parameter)
 	// firstInstance is the index of the first instance to draw (5th parameter)
-	vkCmdDraw(commandBuffer, 3, 1, 0, 0); // draw a triangle (3 vertices)
+	vkCmdDraw(commandBuffer, static_cast<uint32_t>(vertices.size()), 1, 0, 0); // draw a triangle (3 vertices)
 
 	vkCmdEndRenderPass(commandBuffer);
 
@@ -1028,7 +1037,6 @@ void Graphics::DrawFrame()
 {
 	// wait for previous frame to finish
 	vkWaitForFences(m_pLogicalDevice, 1, &m_pInFlightFences->data()[m_uiCurrentFrame], VK_TRUE, UINT64_MAX);
-	vkResetFences(m_pLogicalDevice, 1, &m_pInFlightFences->data()[m_uiCurrentFrame]);
 
 	// get an image from swap chain
 	uint32_t imageIndex = 0;
@@ -1036,12 +1044,13 @@ void Graphics::DrawFrame()
 	if (result == VK_ERROR_OUT_OF_DATE_KHR)
 	{
 		LOG_WARNING("Swap chain out of date, recreating swap chain...");
-		// TO-DO: Implement swap chain recreation logic
-		// RecreateSwapChain();
+		RecreateSwapChain();
 		return;
 	}
 	else if (result != VK_SUCCESS && result != VK_SUBOPTIMAL_KHR)
 		throw std::runtime_error("failed to acquire swap chain image!");
+
+	vkResetFences(m_pLogicalDevice, 1, &m_pInFlightFences->data()[m_uiCurrentFrame]);
 
 	// record command buffer for the acquired image
 	vkResetCommandBuffer(m_pCommandBuffers->data()[m_uiCurrentFrame], 0);
@@ -1061,7 +1070,7 @@ void Graphics::DrawFrame()
 	submitInfo.pCommandBuffers = &m_pCommandBuffers->data()[m_uiCurrentFrame]; // pointer to the command buffers to submit
 	submitInfo.signalSemaphoreCount = 1; // number of signal semaphores
 	submitInfo.pSignalSemaphores = signalSemaphores; // pointer to the signal semaphores
-
+	
 	if (vkQueueSubmit(m_pGraphicsQueue, 1, &submitInfo, m_pInFlightFences->data()[m_uiCurrentFrame]) != VK_SUCCESS)
 		throw std::runtime_error("failed to submit draw command buffer!");
 
@@ -1076,7 +1085,14 @@ void Graphics::DrawFrame()
 	presentInfo.pImageIndices = &imageIndex; // pointer to the image index to present
 	presentInfo.pResults = nullptr;
 	
-	vkQueuePresentKHR(m_pGraphicsQueue, &presentInfo);
+	result = vkQueuePresentKHR(m_pGraphicsQueue, &presentInfo);
+	if (result == VK_ERROR_OUT_OF_DATE_KHR || result == VK_SUBOPTIMAL_KHR || m_bFramebufferResized)
+	{
+		LOG_WARNING("Swap chain out of date, recreating swap chain...");
+		RecreateSwapChain();
+	}
+	else if (result != VK_SUCCESS)
+		throw std::runtime_error("failed to present swap chain image!");
 
 	m_uiCurrentFrame = (m_uiCurrentFrame + 1) % cMaxFramesInFlight; // increment current frame index and wrap around if necessary
 }
@@ -1130,11 +1146,125 @@ void Graphics::CreateSyncObjects()
 	LOG_SUCCESS("Synchronization objects created successfully!");
 }
 
+void Graphics::RecreateSwapChain()
+{
+	LOG_INFO("Recreating swapchain...");
+
+	// check if window is minimized
+	int width = 0, height = 0;
+	glfwGetFramebufferSize(m_pWindow, &width, &height);
+	while (width == 0 || height == 0)
+	{
+		glfwGetFramebufferSize(m_pWindow, &width, &height);
+		glfwWaitEvents();
+	}
+
+	vkDeviceWaitIdle(m_pLogicalDevice); // wait for the device to finish all operations
+	CleanupSwapChain();
+	CreateSwapChain();
+	CreateImageViews();
+	CreateFrameBuffers();
+
+	LOG_SUCCESS("Swapchain recreated successfully!");
+}
+
+void Graphics::CleanupSwapChain()
+{
+	LOG_INFO("Cleaning up swapchain...");
+
+	for (const auto& framebuffer : *m_pFrameBuffers)
+		vkDestroyFramebuffer(m_pLogicalDevice, framebuffer, nullptr);
+
+	for (const auto& imageView : *m_pSwapChainImageViews)
+		vkDestroyImageView(m_pLogicalDevice, imageView, nullptr);
+
+	vkDestroySwapchainKHR(m_pLogicalDevice, m_pSwapChain, nullptr);
+
+	LOG_SUCCESS("Swapchain cleaned up successfully!");
+}
+
+void Graphics::CreateVertexBuffer()
+{
+	LOG_INFO("Creating vertex buffer...");
+
+	VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
+
+	VkBuffer stagingBuffer;
+	CreateBuffer(bufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, m_pVertexBuffer, m_pVertexBufferMemory);
+	// copy data to the vertex buffer
+	void* data;
+	vkMapMemory(m_pLogicalDevice, m_pVertexBufferMemory, 0, bufferSize, 0, &data); // map memory to the vertex buffer
+	memcpy(data, vertices.data(), static_cast<size_t>(bufferSize)); // copy data to the mapped memory
+	vkUnmapMemory(m_pLogicalDevice, m_pVertexBufferMemory); // unmap memory
+
+	LOG_SUCCESS("Vertex buffer created successfully!");
+}
+
+uint32_t Graphics::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
+{
+	LOG_INFO("Finding memory type...");
+
+	VkPhysicalDeviceMemoryProperties memProperties = {};
+	vkGetPhysicalDeviceMemoryProperties(m_pPhysicalDevice, &memProperties);
+
+	for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++)
+	{
+		if ((typeFilter & (1 << i)) && (memProperties.memoryTypes[i].propertyFlags & properties) == properties)
+		{
+			LOG_SUCCESS("Memory type found!");
+			return i; // return the index of the memory type
+		}
+	}
+
+	throw std::runtime_error("failed to find suitable memory type!");
+	return 0;
+}
+
+void Graphics::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory)
+{
+	LOG_INFO("Creating buffer...");
+
+	// create vertex buffer
+	VkBufferCreateInfo bufferInfo = {};
+	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+	bufferInfo.size = sizeof(Vertex) * vertices.size(); // size of the vertex buffer
+	bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT; // usage of the vertex buffer
+	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // exclusive access to the vertex buffer
+	LOG_DEBUG(bufferInfo.size);
+	LOG_DEBUG(bufferInfo.usage);
+	LOG_DEBUG(bufferInfo.sharingMode);
+
+	if (vkCreateBuffer(m_pLogicalDevice, &bufferInfo, nullptr, &m_pVertexBuffer) != VK_SUCCESS)
+		throw std::runtime_error("failed to create vertex buffer!");
+
+	// get memory requirements for the vertex buffer
+	VkMemoryRequirements memRequirements;
+	vkGetBufferMemoryRequirements(m_pLogicalDevice, m_pVertexBuffer, &memRequirements);
+	LOG_DEBUG(memRequirements.size);
+	LOG_DEBUG(memRequirements.memoryTypeBits);
+
+	// allocate memory for the vertex buffer
+	VkMemoryAllocateInfo allocInfo = {};
+	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+	allocInfo.allocationSize = memRequirements.size; // size of the memory to allocate
+	allocInfo.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT); // memory type index
+	LOG_DEBUG(allocInfo.allocationSize);
+	LOG_DEBUG(allocInfo.memoryTypeIndex);
+
+	if (vkAllocateMemory(m_pLogicalDevice, &allocInfo, nullptr, &m_pVertexBufferMemory) != VK_SUCCESS)
+		throw std::runtime_error("failed to allocate vertex buffer memory!");
+
+	vkBindBufferMemory(m_pLogicalDevice, m_pVertexBuffer, m_pVertexBufferMemory, 0); // bind memory to the vertex buffer
+
+	LOG_SUCCESS("Buffer created successfully!");
+}
+
 void Graphics::CreateWindowSurface()
 {
 	LOG_INFO("Creating window surface...");
 
-	if (glfwCreateWindowSurface(m_pInstance, m_pWindow, nullptr, &m_pWindowSurface) != VK_SUCCESS)
+	if (glfwCreateWindowSurface(m_pVulkanInstance, m_pWindow, nullptr, &m_pWindowSurface) != VK_SUCCESS)
 		throw std::runtime_error("failed to create window surface!");
 
 	LOG_SUCCESS("Window surface created successfully!");
@@ -1177,6 +1307,21 @@ bool Graphics::IsDeviceSuitable(const VkPhysicalDevice& device)
 		return false;
 	}
 
+	// get max GPU samples for MSAA
+	VkSampleCountFlags sampleCountFlags = m_DeviceProperties.limits.framebufferColorSampleCounts & m_DeviceProperties.limits.framebufferDepthSampleCounts;
+	if (sampleCountFlags & VK_SAMPLE_COUNT_64_BIT)
+		m_eMaxMSAA = VK_SAMPLE_COUNT_64_BIT;
+	else if (sampleCountFlags & VK_SAMPLE_COUNT_32_BIT)
+		m_eMaxMSAA = VK_SAMPLE_COUNT_32_BIT;
+	else if (sampleCountFlags & VK_SAMPLE_COUNT_16_BIT)
+		m_eMaxMSAA = VK_SAMPLE_COUNT_16_BIT;
+	else if (sampleCountFlags & VK_SAMPLE_COUNT_8_BIT)
+		m_eMaxMSAA = VK_SAMPLE_COUNT_8_BIT;
+	else if (sampleCountFlags & VK_SAMPLE_COUNT_4_BIT)
+		m_eMaxMSAA = VK_SAMPLE_COUNT_4_BIT;
+	else if (sampleCountFlags & VK_SAMPLE_COUNT_2_BIT)
+		m_eMaxMSAA = VK_SAMPLE_COUNT_2_BIT;
+
 	// get GPU features
 	vkGetPhysicalDeviceFeatures(device, &m_DeviceFeatures);
 	if (!m_DeviceFeatures.geometryShader)
@@ -1213,7 +1358,7 @@ bool Graphics::IsDeviceSuitable(const VkPhysicalDevice& device)
 		{
 			familySupport.first = true; // has graphics support
 			graphicsQueueFound = true;
-			m_uiGraphicsQueueFamilyIndex = i;
+			m_uiDeviceGraphicsIndex = i;
 		}
 
 		VkBool32 windowPresentSupport = false;
@@ -1222,7 +1367,7 @@ bool Graphics::IsDeviceSuitable(const VkPhysicalDevice& device)
 		{
 			familySupport.second = true; // has present support
 			presentQueueFound = true;
-			m_uiWindowPresentFamilyIndex = i;
+			m_uiDevicePresentIndex = i;
 		}
 		
 		queueFamilyProperties->data()[i++] = familySupport;
@@ -1245,14 +1390,14 @@ bool Graphics::IsDeviceSuitable(const VkPhysicalDevice& device)
 	{
 		if (familySupport.first && familySupport.second)
 		{
-			m_uiGraphicsQueueFamilyIndex = i;
-			m_uiWindowPresentFamilyIndex = i;
+			m_uiDeviceGraphicsIndex = i;
+			m_uiDevicePresentIndex = i;
 			break;
 		}
 		i++;
 	}
 
-	m_pQueueFamilies.swap(queueFamilies);
+	m_pDeviceQueueFamilies.swap(queueFamilies);
 
 	// get GPU extensions & check if required extensions are supported on GPU
 	uint32_t extensionCount = 0;
@@ -1341,13 +1486,33 @@ void Graphics::InitializeWindow()
 		glfwTerminate();
 		throw std::runtime_error("Failed to create GLFW window");
 	}
+
+	glfwSetWindowUserPointer(m_pWindow, this);
+	glfwSetFramebufferSizeCallback(m_pWindow, FramebufferResizeCallback);
+
 	LOG_SUCCESS("GLFW window created successfully");
 	LOG_DEBUG(m_pWindow);
+}
+
+void Graphics::FramebufferResizeCallback(GLFWwindow* window, int width, int height)
+{
+	auto graphics = static_cast<Graphics*>(glfwGetWindowUserPointer(window));
+	graphics->m_bFramebufferResized = true;
 }
 
 void Graphics::CleanupVulkan()
 {
 	LOG_INFO("Cleaning up Vulkan...");
+
+	CleanupSwapChain();
+
+	vkDestroyBuffer(m_pLogicalDevice, m_pVertexBuffer, nullptr);
+	vkFreeMemory(m_pLogicalDevice, m_pVertexBufferMemory, nullptr);
+
+	vkDestroyPipeline(m_pLogicalDevice, m_pGraphicsPipeline, nullptr);
+	vkDestroyPipelineLayout(m_pLogicalDevice, m_pPipelineLayout, nullptr);
+
+	vkDestroyRenderPass(m_pLogicalDevice, m_pRenderPass, nullptr);
 
 	for (auto i = 0; i < m_pRenderFinishedSemaphores->size(); i++)
 	{
@@ -1363,38 +1528,18 @@ void Graphics::CleanupVulkan()
 			vkDestroySemaphore(m_pLogicalDevice, m_pImageAvailableSemaphores->data()[i], nullptr);
 	}
 
-	if (m_pCommandPool != nullptr)
-		vkDestroyCommandPool(m_pLogicalDevice, m_pCommandPool, nullptr);
+	vkDestroyCommandPool(m_pLogicalDevice, m_pCommandPool, nullptr);
 
-	for (const auto& framebuffer : *m_pFrameBuffers)
-		vkDestroyFramebuffer(m_pLogicalDevice, framebuffer, nullptr);
-	
-	if (m_pGraphicsPipeline != nullptr)
-		vkDestroyPipeline(m_pLogicalDevice, m_pGraphicsPipeline, nullptr);
+	vkDestroyDevice(m_pLogicalDevice, nullptr);
 
-	if (m_pPipelineLayout != nullptr)
-		vkDestroyPipelineLayout(m_pLogicalDevice, m_pPipelineLayout, nullptr);
+#ifdef _DEBUG
+	CleanupDebugger();
+#endif // _DEBUG
 
-	if (m_pRenderPass != nullptr)
-		vkDestroyRenderPass(m_pLogicalDevice, m_pRenderPass, nullptr);
+	vkDestroySurfaceKHR(m_pVulkanInstance, m_pWindowSurface, nullptr);
+	vkDestroyInstance(m_pVulkanInstance, nullptr);
 
-	for (const auto& imageView : *m_pSwapChainImageViews)
-		vkDestroyImageView(m_pLogicalDevice, imageView, nullptr);
-
-	if (m_pSwapChain != nullptr)
-		vkDestroySwapchainKHR(m_pLogicalDevice, m_pSwapChain, nullptr);
-
-	if (m_pLogicalDevice != nullptr)
-		vkDestroyDevice(m_pLogicalDevice, nullptr);
-
-	if (m_pWindow != nullptr)
-		glfwDestroyWindow(m_pWindow);
-
-	if (m_pWindowSurface != nullptr)
-		vkDestroySurfaceKHR(m_pInstance, m_pWindowSurface, nullptr);
-
-	if (m_pInstance != nullptr)
-		vkDestroyInstance(m_pInstance, nullptr);
+	glfwDestroyWindow(m_pWindow);
 
 	glfwTerminate();
 
@@ -1405,13 +1550,13 @@ void Graphics::InitializeDebugger()
 {
 	LOG_INFO("Initializing Vulkan debugger...");
 
-	auto vkCreateDebugUtilsMessengerEXT = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(m_pInstance, "vkCreateDebugUtilsMessengerEXT");
+	auto vkCreateDebugUtilsMessengerEXT = (PFN_vkCreateDebugUtilsMessengerEXT)vkGetInstanceProcAddr(m_pVulkanInstance, "vkCreateDebugUtilsMessengerEXT");
 
 	if (vkCreateDebugUtilsMessengerEXT == nullptr)
 		throw std::runtime_error("vkCreateDebugUtilsMessengerEXT failed");
 
 
-	if (vkCreateDebugUtilsMessengerEXT(m_pInstance, &m_DebugCreateInfo, nullptr, &m_pDebugMessenger) != VK_SUCCESS)
+	if (vkCreateDebugUtilsMessengerEXT(m_pVulkanInstance, &m_DebugCreateInfo, nullptr, &m_pDebugMessenger) != VK_SUCCESS)
 		throw std::runtime_error("failed to setup debugger");
 
 	LOG_SUCCESS("Vulkan debugger initialized successfully!");
@@ -1420,13 +1565,13 @@ void Graphics::InitializeDebugger()
 void Graphics::CleanupDebugger()
 {
 	LOG_INFO("Cleaning up Vulkan debugger...");
-	auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(m_pInstance, "vkDestroyDebugUtilsMessengerEXT");
+	auto func = (PFN_vkDestroyDebugUtilsMessengerEXT)vkGetInstanceProcAddr(m_pVulkanInstance, "vkDestroyDebugUtilsMessengerEXT");
 
 	if (func == nullptr)
 		throw std::runtime_error("vkCreateDebugUtilsMessengerEXT error");
 
 
-	func(m_pInstance, m_pDebugMessenger, nullptr);
+	func(m_pVulkanInstance, m_pDebugMessenger, nullptr);
 
 	LOG_SUCCESS("Vulkan debugger cleaned up successfully!");
 }

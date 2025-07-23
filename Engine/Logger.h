@@ -50,7 +50,7 @@ public:
 		std::cout << termcolor::yellow << "[" << elements.size() << "] ";
 
 		if (level == LogLevel::DEBUG)
-			std::cout << termcolor::white << "[" << termcolor::green << valueName << termcolor::white << "] ";
+			std::cout << termcolor::white << "[" << termcolor::green << valueName << termcolor::white << "]\n";
 
 		int i = 0;
 		for (const auto& element : elements)

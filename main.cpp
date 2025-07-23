@@ -7,8 +7,8 @@ int main()
 
 	GraphicsSettings graphicsSettings;
 	graphicsSettings.sWindowName = "Lordi Engine";
-	graphicsSettings.uiWindowWidth = 1280;
-	graphicsSettings.uiWindowHeight = 720;
+	graphicsSettings.uiWindowWidth = 800;
+	graphicsSettings.uiWindowHeight = 600;
 	graphicsSettings.eVSync = VSyncOptions::MAILBOX;
 	graphicsSettings.eColorBlending = ColorBlendingOptions::NONE;
 	graphicsSettings.eMSAA = MSAAOptions::X1;
