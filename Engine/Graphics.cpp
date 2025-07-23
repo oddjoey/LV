@@ -44,8 +44,9 @@ void Graphics::Initialize()
 	CreateRenderPass();
 	CreateGraphicsPipeline();
 	CreateFrameBuffers();
-	CreateCommandPool();
+	CreateCommandPools();
 	CreateVertexBuffer();
+	CreateIndexBuffer();
 	CreateCommandBuffers();
 	CreateSyncObjects();
 
@@ -207,9 +208,9 @@ void Graphics::CreateLogicalDevice()
 	if (vkCreateDevice(m_pPhysicalDevice, &deviceCreateInfo, nullptr, &m_pLogicalDevice) != VK_SUCCESS)
 		throw std::runtime_error("failed to create logical device!");
 
-
 	vkGetDeviceQueue(m_pLogicalDevice, m_uiDeviceGraphicsIndex, 0, &m_pGraphicsQueue);
 	vkGetDeviceQueue(m_pLogicalDevice, m_uiDevicePresentIndex, 0, &m_pPresentQueue);
+	vkGetDeviceQueue(m_pLogicalDevice, m_uiDeviceTransferIndex, 0, &m_pTransferQueue);
 
 	LOG_SUCCESS("Logical device created successfully!");
 }
@@ -321,18 +322,18 @@ void Graphics::CreateSwapChain()
 	LOG_DEBUG(m_SwapChainCreateInfo.imageArrayLayers);
 	LOG_DEBUG(m_SwapChainCreateInfo.imageUsage);
 
-	if (m_uiDeviceGraphicsIndex != m_uiDevicePresentIndex)
+	if (m_uiDeviceGraphicsIndex != m_uiDevicePresentIndex || m_uiDeviceGraphicsIndex != m_uiDeviceTransferIndex)
 	{
-		LOG_WARNING("Graphics queue family is different from present queue family, using concurrent mode for swap chain images.");
+		LOG_WARNING("Needed features use seperate queue families, using concurrent mode for swap chain images.");
 		// If the graphics queue family is different from the present queue family, we need to specify the queue families
-		uint32_t queueFamilyIndices[] = { m_uiDeviceGraphicsIndex, m_uiDevicePresentIndex };
+		std::vector<uint32_t> queueFamilyIndices = { m_uiDeviceGraphicsIndex, m_uiDevicePresentIndex, m_uiDeviceTransferIndex };
 		m_SwapChainCreateInfo.imageSharingMode = VK_SHARING_MODE_CONCURRENT; // images can be shared between multiple queues
-		m_SwapChainCreateInfo.queueFamilyIndexCount = 2; // number of queue families
-		m_SwapChainCreateInfo.pQueueFamilyIndices = queueFamilyIndices; // pointer to the queue family indices
+		m_SwapChainCreateInfo.queueFamilyIndexCount = static_cast<uint32_t>(queueFamilyIndices.size()); // number of queue families
+		m_SwapChainCreateInfo.pQueueFamilyIndices = queueFamilyIndices.data(); // pointer to the queue family indices
 	}
 	else
 	{
-		LOG_INFO("Graphics queue family is the same as present queue family, using exclusive mode for swap chain images.");
+		LOG_INFO("Required features use the same queue family, using exclusive mode for swap chain images.");
 		// If the graphics queue family is the same as the present queue family, we can use exclusive mode
 		m_SwapChainCreateInfo.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE; // images are only used by one queue at a time
 		m_SwapChainCreateInfo.queueFamilyIndexCount = 0; // no queue families
@@ -912,23 +913,36 @@ void Graphics::CreateFrameBuffers()
 	LOG_SUCCESS("Frame buffers created successfully!");
 }
 
-void Graphics::CreateCommandPool()
+void Graphics::CreateCommandPools()
 {
-	LOG_INFO("Creating command pool...");
+	LOG_INFO("Creating command pools...");
 
-	VkCommandPoolCreateInfo poolInfo = {};
-	poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	LOG_DEBUG("Creating graphics pool...");
+	VkCommandPoolCreateInfo drawingPoolInfo = {};
+	drawingPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
 	// VK_COMMAND_POOL_CREATE_TRANSIENT_BIT = command buffers are rerecorded often
 	// VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT = command buffers individually rerecorded
-	poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-	poolInfo.queueFamilyIndex = m_uiDeviceGraphicsIndex;
-	LOG_DEBUG(poolInfo.flags);
-	LOG_DEBUG(poolInfo.queueFamilyIndex);
+	drawingPoolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+	drawingPoolInfo.queueFamilyIndex = m_uiDeviceGraphicsIndex;
+	LOG_DEBUG(drawingPoolInfo.flags);
+	LOG_DEBUG(drawingPoolInfo.queueFamilyIndex);
 
-	if (vkCreateCommandPool(m_pLogicalDevice, &poolInfo, nullptr, &m_pCommandPool) != VK_SUCCESS)
-		throw std::runtime_error("failed to create command pool!");
+	if (vkCreateCommandPool(m_pLogicalDevice, &drawingPoolInfo, nullptr, &m_pDrawingCommandPool) != VK_SUCCESS)
+		throw std::runtime_error("failed to create drawing command pool!");
+	LOG_DEBUG("Sucessfully created graphics pool!");
 
-	LOG_SUCCESS("Suvcessfully created command pool!");
+	VkCommandPoolCreateInfo transferPoolInfo = {};
+	transferPoolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+	transferPoolInfo.flags = VK_COMMAND_POOL_CREATE_TRANSIENT_BIT;
+	transferPoolInfo.queueFamilyIndex = m_uiDeviceTransferIndex;
+	LOG_DEBUG(transferPoolInfo.flags);
+	LOG_DEBUG(transferPoolInfo.queueFamilyIndex);
+
+	if (vkCreateCommandPool(m_pLogicalDevice, &transferPoolInfo, nullptr, &m_pTransferCommandPool) != VK_SUCCESS)
+		throw std::runtime_error("failed to create transfer command pool!");
+	LOG_DEBUG("Sucessfully created transfer pool!");
+
+	LOG_SUCCESS("Successfully created command pools!");
 }
 
 void Graphics::CreateCommandBuffers()
@@ -940,7 +954,7 @@ void Graphics::CreateCommandBuffers()
 	LOG_DEBUG("Allocating command buffer from command pool:");
 	VkCommandBufferAllocateInfo allocateInfo = {}; // allocation parameters for the command buffer
 	allocateInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-	allocateInfo.commandPool = m_pCommandPool; // command pool from which the command buffers are allocated
+	allocateInfo.commandPool = m_pDrawingCommandPool; // command pool from which the command buffers are allocated
 	// VK_COMMAND_BUFFER_LEVEL_PRIMARY = can be submitted to queue for exec, but not called from other command buffers.
 	// VK_COMMAND_BUFFER_LEVEL_SECONDARY = cannot be submitted to queue but can be called from primary command buffers.
 	allocateInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
@@ -1021,11 +1035,9 @@ void Graphics::RecordCommandBuffer(const VkCommandBuffer& commandBuffer, uint32_
 	VkDeviceSize offsets[] = { 0 }; // offset in bytes from the start of the buffer
 	vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets); // bind vertex buffer to the command buffer
 
-	// vertexCount is the number of vertices to draw (2nd parameter)
-	// instanceCount is the number of instances to draw (3rd parameter)
-	// firstVertex is the index of the first vertex to draw (4th parameter)
-	// firstInstance is the index of the first instance to draw (5th parameter)
-	vkCmdDraw(commandBuffer, static_cast<uint32_t>(vertices.size()), 1, 0, 0); // draw a triangle (3 vertices)
+	vkCmdBindIndexBuffer(commandBuffer, m_pIndexBuffer, 0, VK_INDEX_TYPE_UINT16);
+
+	vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
 
 	vkCmdEndRenderPass(commandBuffer);
 
@@ -1189,16 +1201,48 @@ void Graphics::CreateVertexBuffer()
 
 	VkDeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
 
-	VkBuffer stagingBuffer;
-	CreateBuffer(bufferSize, VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
-		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, m_pVertexBuffer, m_pVertexBufferMemory);
-	// copy data to the vertex buffer
+	VkBuffer stagingBuffer = nullptr;
+	VkDeviceMemory stagingBufferMemory = nullptr;
+	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+
 	void* data;
-	vkMapMemory(m_pLogicalDevice, m_pVertexBufferMemory, 0, bufferSize, 0, &data); // map memory to the vertex buffer
-	memcpy(data, vertices.data(), static_cast<size_t>(bufferSize)); // copy data to the mapped memory
-	vkUnmapMemory(m_pLogicalDevice, m_pVertexBufferMemory); // unmap memory
+	vkMapMemory(m_pLogicalDevice, stagingBufferMemory, 0, bufferSize, 0, &data);
+	memcpy(data, vertices.data(), static_cast<size_t>(bufferSize)); 
+	vkUnmapMemory(m_pLogicalDevice, stagingBufferMemory);
+
+	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT,
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_pVertexBuffer, m_pVertexBufferMemory);
+
+	CopyBuffer(stagingBuffer, m_pVertexBuffer, bufferSize);
+
+	vkDestroyBuffer(m_pLogicalDevice, stagingBuffer, nullptr);
+	vkFreeMemory(m_pLogicalDevice, stagingBufferMemory, nullptr);
 
 	LOG_SUCCESS("Vertex buffer created successfully!");
+}
+
+void Graphics::CreateIndexBuffer()
+{
+	VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
+
+	VkBuffer stagingBuffer;
+	VkDeviceMemory stagingBufferMemory;
+	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+		VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT, stagingBuffer, stagingBufferMemory);
+
+	void* data;
+	vkMapMemory(m_pLogicalDevice, stagingBufferMemory, 0, bufferSize, 0, &data);
+	memcpy(data, indices.data(), static_cast<size_t>(bufferSize));
+	vkUnmapMemory(m_pLogicalDevice, stagingBufferMemory);
+
+	CreateBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
+		VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, m_pIndexBuffer, m_pIndexBufferMemory);
+
+	CopyBuffer(stagingBuffer, m_pIndexBuffer, bufferSize);
+
+	vkDestroyBuffer(m_pLogicalDevice, stagingBuffer, nullptr);
+	vkFreeMemory(m_pLogicalDevice, stagingBufferMemory, nullptr);
 }
 
 uint32_t Graphics::FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties)
@@ -1228,19 +1272,19 @@ void Graphics::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemor
 	// create vertex buffer
 	VkBufferCreateInfo bufferInfo = {};
 	bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-	bufferInfo.size = sizeof(Vertex) * vertices.size(); // size of the vertex buffer
-	bufferInfo.usage = VK_BUFFER_USAGE_VERTEX_BUFFER_BIT; // usage of the vertex buffer
+	bufferInfo.size = size; // size of the vertex buffer
+	bufferInfo.usage = usage; // usage of the vertex buffer
 	bufferInfo.sharingMode = VK_SHARING_MODE_EXCLUSIVE; // exclusive access to the vertex buffer
 	LOG_DEBUG(bufferInfo.size);
 	LOG_DEBUG(bufferInfo.usage);
 	LOG_DEBUG(bufferInfo.sharingMode);
 
-	if (vkCreateBuffer(m_pLogicalDevice, &bufferInfo, nullptr, &m_pVertexBuffer) != VK_SUCCESS)
+	if (vkCreateBuffer(m_pLogicalDevice, &bufferInfo, nullptr, &buffer) != VK_SUCCESS)
 		throw std::runtime_error("failed to create vertex buffer!");
 
 	// get memory requirements for the vertex buffer
 	VkMemoryRequirements memRequirements;
-	vkGetBufferMemoryRequirements(m_pLogicalDevice, m_pVertexBuffer, &memRequirements);
+	vkGetBufferMemoryRequirements(m_pLogicalDevice, buffer, &memRequirements);
 	LOG_DEBUG(memRequirements.size);
 	LOG_DEBUG(memRequirements.memoryTypeBits);
 
@@ -1248,16 +1292,52 @@ void Graphics::CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemor
 	VkMemoryAllocateInfo allocInfo = {};
 	allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
 	allocInfo.allocationSize = memRequirements.size; // size of the memory to allocate
-	allocInfo.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT); // memory type index
+	allocInfo.memoryTypeIndex = FindMemoryType(memRequirements.memoryTypeBits, properties); // memory type index
 	LOG_DEBUG(allocInfo.allocationSize);
 	LOG_DEBUG(allocInfo.memoryTypeIndex);
 
-	if (vkAllocateMemory(m_pLogicalDevice, &allocInfo, nullptr, &m_pVertexBufferMemory) != VK_SUCCESS)
+	if (vkAllocateMemory(m_pLogicalDevice, &allocInfo, nullptr, &bufferMemory) != VK_SUCCESS)
 		throw std::runtime_error("failed to allocate vertex buffer memory!");
 
-	vkBindBufferMemory(m_pLogicalDevice, m_pVertexBuffer, m_pVertexBufferMemory, 0); // bind memory to the vertex buffer
+	vkBindBufferMemory(m_pLogicalDevice, buffer, bufferMemory, 0); // bind memory to the vertex buffer
 
 	LOG_SUCCESS("Buffer created successfully!");
+}
+
+void Graphics::CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size)
+{
+	VkCommandBufferAllocateInfo allocInfo = {};
+	allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+	allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+	allocInfo.commandPool = m_pTransferCommandPool;
+	allocInfo.commandBufferCount = 1;
+
+	VkCommandBuffer commandBuffer = nullptr;
+	vkAllocateCommandBuffers(m_pLogicalDevice, &allocInfo, &commandBuffer);
+
+	VkCommandBufferBeginInfo beginInfo = {};
+	beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+	beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+	vkBeginCommandBuffer(commandBuffer, &beginInfo);
+
+	VkBufferCopy copyRegion = {};
+	copyRegion.srcOffset = 0;
+	copyRegion.dstOffset = 0;
+	copyRegion.size = size;
+	vkCmdCopyBuffer(commandBuffer, srcBuffer, dstBuffer, 1, &copyRegion);
+
+	vkEndCommandBuffer(commandBuffer);
+
+	VkSubmitInfo submitInfo = {};
+	submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+	submitInfo.commandBufferCount = 1;
+	submitInfo.pCommandBuffers = &commandBuffer;
+
+	vkQueueSubmit(m_pTransferQueue, 1, &submitInfo, nullptr);
+	vkQueueWaitIdle(m_pTransferQueue);
+
+	vkFreeCommandBuffers(m_pLogicalDevice, m_pTransferCommandPool, 1, &commandBuffer);
 }
 
 void Graphics::CreateWindowSurface()
@@ -1307,6 +1387,7 @@ bool Graphics::IsDeviceSuitable(const VkPhysicalDevice& device)
 		return false;
 	}
 
+	LOG_DEBUG("Geting device's max samples for MSAA:");
 	// get max GPU samples for MSAA
 	VkSampleCountFlags sampleCountFlags = m_DeviceProperties.limits.framebufferColorSampleCounts & m_DeviceProperties.limits.framebufferDepthSampleCounts;
 	if (sampleCountFlags & VK_SAMPLE_COUNT_64_BIT)
@@ -1321,6 +1402,7 @@ bool Graphics::IsDeviceSuitable(const VkPhysicalDevice& device)
 		m_eMaxMSAA = VK_SAMPLE_COUNT_4_BIT;
 	else if (sampleCountFlags & VK_SAMPLE_COUNT_2_BIT)
 		m_eMaxMSAA = VK_SAMPLE_COUNT_2_BIT;
+	LOG_DEBUG(m_eMaxMSAA);
 
 	// get GPU features
 	vkGetPhysicalDeviceFeatures(device, &m_DeviceFeatures);
@@ -1344,33 +1426,40 @@ bool Graphics::IsDeviceSuitable(const VkPhysicalDevice& device)
 	auto queueFamilies = std::make_unique<std::vector<VkQueueFamilyProperties>>(queueFamilyCount);
 	vkGetPhysicalDeviceQueueFamilyProperties(device, &queueFamilyCount, queueFamilies->data());
 	LOG_DEBUG(queueFamilies->size());
-
-	auto queueFamilyProperties = std::make_unique<std::vector<std::pair<bool, bool>>>(queueFamilyCount);
+	auto queueFamilyProperties = std::make_unique<std::vector<std::vector<bool>>>(queueFamilyCount);
 	
 	bool presentQueueFound = false;
 	bool graphicsQueueFound = false;
+	bool transferQueueFound = false;
 	int i = 0;
 	for (const auto& queueFamily : *queueFamilies)
 	{
-		std::pair<bool, bool> familySupport = { false, false };
+		std::vector<bool> queueFamiliesFound = { false, false, false }; // graphics, compute, present
 
 		if (queueFamily.queueFlags & VK_QUEUE_GRAPHICS_BIT)
 		{
-			familySupport.first = true; // has graphics support
+			queueFamiliesFound[0] = true; // has graphics support
 			graphicsQueueFound = true;
 			m_uiDeviceGraphicsIndex = i;
+		}
+
+		if (queueFamily.queueFlags & VK_QUEUE_TRANSFER_BIT)
+		{
+			queueFamiliesFound[1] = true; // has graphics support
+			transferQueueFound = true;
+			m_uiDeviceTransferIndex = i;
 		}
 
 		VkBool32 windowPresentSupport = false;
 		vkGetPhysicalDeviceSurfaceSupportKHR(device, i, m_pWindowSurface, &windowPresentSupport);
 		if (windowPresentSupport)
 		{
-			familySupport.second = true; // has present support
+			queueFamiliesFound[2] = true; // has present support
 			presentQueueFound = true;
 			m_uiDevicePresentIndex = i;
 		}
 		
-		queueFamilyProperties->data()[i++] = familySupport;
+		queueFamilyProperties->data()[i++] = queueFamiliesFound;
 	}
 
 	if (!graphicsQueueFound)
@@ -1383,15 +1472,21 @@ bool Graphics::IsDeviceSuitable(const VkPhysicalDevice& device)
 		LOG_WARNING("Present queue not found, skipping device...");
 		return false;
 	}
+	if (!transferQueueFound)
+	{
+		LOG_WARNING("Transfer queue not found, skipping device...");
+		return false;
+	}
 
 	// Check if there is a queue family that supports both graphics and present operations (best performance)
 	i = 0;
 	for (const auto& familySupport : *queueFamilyProperties)
 	{
-		if (familySupport.first && familySupport.second)
+		if (familySupport[0] && familySupport[1] && familySupport[2])
 		{
 			m_uiDeviceGraphicsIndex = i;
 			m_uiDevicePresentIndex = i;
+			m_uiDeviceTransferIndex = i;
 			break;
 		}
 		i++;
@@ -1506,6 +1601,9 @@ void Graphics::CleanupVulkan()
 
 	CleanupSwapChain();
 
+	vkDestroyBuffer(m_pLogicalDevice, m_pIndexBuffer, nullptr);
+	vkFreeMemory(m_pLogicalDevice, m_pIndexBufferMemory, nullptr);
+
 	vkDestroyBuffer(m_pLogicalDevice, m_pVertexBuffer, nullptr);
 	vkFreeMemory(m_pLogicalDevice, m_pVertexBufferMemory, nullptr);
 
@@ -1528,7 +1626,8 @@ void Graphics::CleanupVulkan()
 			vkDestroySemaphore(m_pLogicalDevice, m_pImageAvailableSemaphores->data()[i], nullptr);
 	}
 
-	vkDestroyCommandPool(m_pLogicalDevice, m_pCommandPool, nullptr);
+	vkDestroyCommandPool(m_pLogicalDevice, m_pDrawingCommandPool, nullptr);
+	vkDestroyCommandPool(m_pLogicalDevice, m_pTransferCommandPool, nullptr);
 
 	vkDestroyDevice(m_pLogicalDevice, nullptr);
 

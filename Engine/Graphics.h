@@ -167,9 +167,14 @@ struct Vertex
 };
 
 const std::vector<Vertex> vertices = {
-	{{0.0f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-	{{0.5f, 0.5f}, {0.0f, 1.0f, 0.0f}},
-	{{-0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}}
+	{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
+	{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
+	{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
+	{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+};
+
+const std::vector<uint16_t> indices = {
+	0, 1, 2, 2, 3, 0
 };
 
 class Graphics
@@ -205,7 +210,7 @@ private:
 	void CreateRenderPass();
 	void CreateGraphicsPipeline();
 	void CreateFrameBuffers();
-	void CreateCommandPool();
+	void CreateCommandPools();
 	void CreateCommandBuffers();
 	void RecordCommandBuffer(const VkCommandBuffer& commandBuffer, uint32_t imageIndex);
 	void DrawFrame();
@@ -213,8 +218,10 @@ private:
 	void RecreateSwapChain();
 	void CleanupSwapChain();
 	void CreateVertexBuffer();
+	void CreateIndexBuffer();
 	uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 	void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
+	void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
 
 	friend class Lordi;
 
@@ -241,10 +248,12 @@ private:
 	std::unique_ptr<std::vector<VkQueueFamilyProperties>> m_pDeviceQueueFamilies = nullptr;
 	uint32_t m_uiDeviceGraphicsIndex = 0;
 	uint32_t m_uiDevicePresentIndex = 0;
+	uint32_t m_uiDeviceTransferIndex = 0;
 
 	VkDevice m_pLogicalDevice = nullptr;
 	VkQueue m_pGraphicsQueue = nullptr;
 	VkQueue m_pPresentQueue = nullptr;
+	VkQueue m_pTransferQueue = nullptr;
 
 	VkSurfaceCapabilitiesKHR m_SwapChainCapabilities = {};
 	std::unique_ptr<std::vector<VkSurfaceFormatKHR>> m_pSwapChainFormats = nullptr;
@@ -262,7 +271,8 @@ private:
 	VkPipelineLayout m_pPipelineLayout = nullptr;
 	VkPipeline m_pGraphicsPipeline = nullptr;
 	std::unique_ptr<std::vector<VkFramebuffer>> m_pFrameBuffers = nullptr;
-	VkCommandPool m_pCommandPool = nullptr;
+	VkCommandPool m_pDrawingCommandPool = nullptr;
+	VkCommandPool m_pTransferCommandPool = nullptr;
 	std::unique_ptr<std::vector<VkCommandBuffer>> m_pCommandBuffers = nullptr;
 	
 	std::unique_ptr<std::vector<VkSemaphore>> m_pImageAvailableSemaphores = nullptr;
@@ -273,4 +283,6 @@ private:
 
 	VkBuffer m_pVertexBuffer = nullptr;
 	VkDeviceMemory m_pVertexBufferMemory = nullptr;
+	VkBuffer m_pIndexBuffer = nullptr;
+	VkDeviceMemory m_pIndexBufferMemory = nullptr;
 };
