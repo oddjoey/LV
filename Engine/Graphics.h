@@ -6,7 +6,9 @@
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
 
+#define GLM_FORCE_RADIANS
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include <iostream>		// std::cout
 #include <vector>		// std::vector
@@ -14,6 +16,7 @@
 #include <set>			// std::set
 #include <algorithm>	// std::clamp
 #include <array>		// std::array
+#include <chrono>		// time
 
 #include "Utility.h"
 #include "Logger.h"
@@ -166,6 +169,13 @@ struct Vertex
 	}
 };
 
+struct UniformBufferObject
+{
+	glm::mat4 model;
+	glm::mat4 view;
+	glm::mat4 proj;
+};
+
 const std::vector<Vertex> vertices = {
 	{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
 	{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
@@ -190,18 +200,25 @@ private:
 	Graphics();
 	static std::shared_ptr<Graphics> Get();
 
+	// Check if cRequiredValidationLayers layers are present in Vulkan's instance layers for debugging purposes
 	bool IsDebugSupported();
+	// Start Vulkan debugger
 	void InitializeDebugger();
+	// Cleanup Vulkan debugger
 	void CleanupDebugger();
-	static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity, VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
+	// Debug messages sent here to be printed to console
+	static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+		VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
+	// Create GLFW window
 	void InitializeWindow();
+	// Window/framebuffer resizes are sent here
 	static void FramebufferResizeCallback(GLFWwindow* window, int width, int height);
+	// Create a Vulkan surface from our GLFW window
 	void CreateWindowSurface();
+	// Create a Vulkan instance, specifying Vulkan API version, which extensions and layers we want to use, debug settings
 	void CreateVulkanInstance();
 	void CleanupVulkan();
 	void GetVulkanData();
-	bool IsLayerPresent(const std::string& layerName);
-	bool IsExtensionPresent(const std::string& extensionName);
 	bool IsDeviceSuitable(const VkPhysicalDevice& device);
 	void PickPhysicalDevice();
 	void CreateLogicalDevice();
@@ -219,9 +236,15 @@ private:
 	void CleanupSwapChain();
 	void CreateVertexBuffer();
 	void CreateIndexBuffer();
-	uint32_t FindMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
-	void CreateBuffer(VkDeviceSize size, VkBufferUsageFlags usage, VkMemoryPropertyFlags properties, VkBuffer& buffer, VkDeviceMemory& bufferMemory);
-	void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+	uint32_t FindMemoryTypeIndex(uint32_t memoryType, VkMemoryPropertyFlags memoryProperties);
+	void CreateBuffer(VkDeviceSize bufferSize, VkBufferUsageFlags bufferUsageFlags,
+		VkMemoryPropertyFlags memoryPropertyFlags, VkBuffer& buffer, VkDeviceMemory& deviceMemory);
+	void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize bufferSize);
+	void CreateDescriptorSetLayout();
+	void CreateUniformBuffers();
+	void UpdateUniformBuffer(uint32_t currentImage);
+	void CreateDescriptorPool();
+	void CreateDescriptorSets();
 
 	friend class Lordi;
 
@@ -234,18 +257,19 @@ private:
 	GLFWwindow* m_pWindow = nullptr;
 	VkSurfaceKHR m_pWindowSurface = nullptr;
 
-	VkDebugUtilsMessengerEXT m_pDebugMessenger = nullptr;
-	VkDebugUtilsMessengerCreateInfoEXT m_DebugCreateInfo = {};
-
 	VkInstance m_pVulkanInstance = nullptr;
-	std::unique_ptr<std::vector<VkExtensionProperties>> m_pGlobalExtensions = nullptr;
-	std::unique_ptr<std::vector<VkLayerProperties>> m_pGlobalLayers = nullptr;
+	std::unique_ptr<std::vector<VkExtensionProperties>> m_pInstanceExtensions = nullptr;
+	std::unique_ptr<std::vector<VkLayerProperties>> m_pInstanceLayers = nullptr;
+
+	VkDebugUtilsMessengerCreateInfoEXT m_DebugCreateInfo = {};
+	VkDebugUtilsMessengerEXT m_pDebugMessenger = nullptr;
 
 	VkPhysicalDevice m_pPhysicalDevice = nullptr; 
-	VkPhysicalDeviceProperties m_DeviceProperties = {};
-	VkPhysicalDeviceFeatures m_DeviceFeatures = {};
-	std::unique_ptr<std::vector<VkExtensionProperties>> m_pDeviceExtensions = nullptr;
-	std::unique_ptr<std::vector<VkQueueFamilyProperties>> m_pDeviceQueueFamilies = nullptr;
+	std::unique_ptr<std::vector<VkQueueFamilyProperties>> m_pPhysicalDeviceQueueFamiliesProperties = nullptr;
+	VkPhysicalDeviceFeatures m_PhysicalDeviceFeatures = {};
+	VkPhysicalDeviceMemoryProperties m_PhysicalDeviceMemoryProperties = {};
+	VkPhysicalDeviceProperties m_PhysicalDeviceProperties = {};
+	std::unique_ptr<std::vector<VkExtensionProperties>> m_pPhysicalDeviceExtensions = nullptr;
 	uint32_t m_uiDeviceGraphicsIndex = 0;
 	uint32_t m_uiDevicePresentIndex = 0;
 	uint32_t m_uiDeviceTransferIndex = 0;
@@ -255,19 +279,20 @@ private:
 	VkQueue m_pPresentQueue = nullptr;
 	VkQueue m_pTransferQueue = nullptr;
 
+	VkSwapchainKHR m_pSwapChain = nullptr;
+	std::unique_ptr<std::vector<VkImage>> m_pSwapChainImages = nullptr;
+	std::unique_ptr<std::vector<VkImageView>> m_pSwapChainImageViews = nullptr;
 	VkSurfaceCapabilitiesKHR m_SwapChainCapabilities = {};
 	std::unique_ptr<std::vector<VkSurfaceFormatKHR>> m_pSwapChainFormats = nullptr;
 	std::unique_ptr<std::vector<VkPresentModeKHR>> m_pSwapChainPresentModes = nullptr;
 	VkSwapchainCreateInfoKHR m_SwapChainCreateInfo = {};
-	VkSwapchainKHR m_pSwapChain = nullptr;
-	std::unique_ptr<std::vector<VkImage>> m_pSwapChainImages = nullptr;
-	std::unique_ptr<std::vector<VkImageView>> m_pSwapChainImageViews = nullptr;
 
 	VkShaderModule m_pVertexShaderModule = nullptr;
 	VkShaderModule m_pFragmentShaderModule = nullptr;
 	VkSampleCountFlagBits m_eMaxMSAA = VK_SAMPLE_COUNT_1_BIT;
 	VkSampleCountFlagBits m_eUserMSAA = VK_SAMPLE_COUNT_1_BIT;
 	VkRenderPass m_pRenderPass = nullptr;
+	VkDescriptorSetLayout m_pDescriptorSetLayout = nullptr;
 	VkPipelineLayout m_pPipelineLayout = nullptr;
 	VkPipeline m_pGraphicsPipeline = nullptr;
 	std::unique_ptr<std::vector<VkFramebuffer>> m_pFrameBuffers = nullptr;
@@ -277,7 +302,7 @@ private:
 	
 	std::unique_ptr<std::vector<VkSemaphore>> m_pImageAvailableSemaphores = nullptr;
 	std::unique_ptr<std::vector<VkSemaphore>> m_pRenderFinishedSemaphores = nullptr;
-	std::unique_ptr<std::vector<VkFence>> m_pInFlightFences = nullptr;
+	std::unique_ptr<std::vector<VkFence>> m_pFrameInFlightFences = nullptr;
 	const int cMaxFramesInFlight = 2;
 	uint32_t m_uiCurrentFrame = 0;
 
@@ -285,4 +310,11 @@ private:
 	VkDeviceMemory m_pVertexBufferMemory = nullptr;
 	VkBuffer m_pIndexBuffer = nullptr;
 	VkDeviceMemory m_pIndexBufferMemory = nullptr;
+
+	std::unique_ptr<std::vector<VkBuffer>> m_pUniformBuffers;
+	std::unique_ptr<std::vector<VkDeviceMemory>> m_pUniformBuffersMemory;
+	std::unique_ptr<std::vector<void*>> m_pUniformBuffersMapped;
+
+	VkDescriptorPool m_pDescriptorPool = nullptr;
+	std::unique_ptr<std::vector<VkDescriptorSet>> m_pDescriptorSets = nullptr;
 };
