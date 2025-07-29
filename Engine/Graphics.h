@@ -1,5 +1,6 @@
 #pragma once
 
+
 #define VK_USE_PLATFORM_WIN32_KHR
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
@@ -9,6 +10,10 @@
 #define GLM_FORCE_RADIANS
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+
+#define VULKAN_HPP_NO_CONSTRUCTORS
+#define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
+#include <vulkan/vulkan.hpp>
 
 #include <iostream>		// std::cout
 #include <vector>		// std::vector
@@ -143,30 +148,6 @@ struct Vertex
 {
 	glm::vec2 position;
 	glm::vec3 color;
-
-	static VkVertexInputBindingDescription GetBindingDescription()
-	{
-		VkVertexInputBindingDescription bindingDescription = {};
-		bindingDescription.binding = 0;
-		bindingDescription.stride = sizeof(Vertex);
-		bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-		return bindingDescription;
-	}
-
-	static std::array<VkVertexInputAttributeDescription, 2> GetAttributeDescriptions()
-	{
-		std::array<VkVertexInputAttributeDescription, 2> attributeDescriptions = {};
-		attributeDescriptions[0].binding = 0;
-		attributeDescriptions[0].location = 0; // location in the shader
-		attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT; // position is a vec2 (2 floats)
-		attributeDescriptions[0].offset = offsetof(Vertex, position); // offset in the struct
-
-		attributeDescriptions[1].binding = 0;
-		attributeDescriptions[1].location = 1; // location in the shader
-		attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT; // color is a vec3 (3 floats)
-		attributeDescriptions[1].offset = offsetof(Vertex, color); // offset in the struct
-		return attributeDescriptions;
-	}
 };
 
 struct UniformBufferObject
@@ -207,8 +188,7 @@ private:
 	// Cleanup Vulkan debugger
 	void CleanupDebugger();
 	// Debug messages sent here to be printed to console
-	static VKAPI_ATTR VkBool32 VKAPI_CALL DebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-		VkDebugUtilsMessageTypeFlagsEXT messageType, const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
+	static VKAPI_ATTR vk::Bool32 VKAPI_CALL DebugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT messageSeverity, vk::DebugUtilsMessageTypeFlagsEXT messageType, const vk::DebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
 	// Create GLFW window
 	void InitializeWindow();
 	// Window/framebuffer resizes are sent here
@@ -219,7 +199,7 @@ private:
 	void CreateVulkanInstance();
 	void CleanupVulkan();
 	void GetVulkanData();
-	bool IsDeviceSuitable(const VkPhysicalDevice& device);
+	bool IsDeviceSuitable(const vk::PhysicalDevice& device);
 	void PickPhysicalDevice();
 	void CreateLogicalDevice();
 	void CreateSwapChain();
@@ -229,17 +209,16 @@ private:
 	void CreateFrameBuffers();
 	void CreateCommandPools();
 	void CreateCommandBuffers();
-	void RecordCommandBuffer(const VkCommandBuffer& commandBuffer, uint32_t imageIndex);
+	void RecordCommandBuffer(const vk::CommandBuffer& commandBuffer, uint32_t imageIndex);
 	void DrawFrame();
 	void CreateSyncObjects();
 	void RecreateSwapChain();
 	void CleanupSwapChain();
 	void CreateVertexBuffer();
 	void CreateIndexBuffer();
-	uint32_t FindMemoryTypeIndex(uint32_t memoryType, VkMemoryPropertyFlags memoryProperties);
-	void CreateBuffer(VkDeviceSize bufferSize, VkBufferUsageFlags bufferUsageFlags,
-		VkMemoryPropertyFlags memoryPropertyFlags, VkBuffer& buffer, VkDeviceMemory& deviceMemory);
-	void CopyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize bufferSize);
+	uint32_t FindMemoryTypeIndex(uint32_t memoryType, vk::MemoryPropertyFlags memoryProperties);
+	void CreateBuffer(vk::DeviceSize bufferSize, vk::BufferUsageFlags bufferUsageFlags, vk::MemoryPropertyFlags memoryPropertyFlags, vk::Buffer& buffer, vk::DeviceMemory& deviceMemory);
+	void CopyBuffer(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize bufferSize);
 	void CreateDescriptorSetLayout();
 	void CreateUniformBuffers();
 	void UpdateUniformBuffer(uint32_t currentImage);
@@ -248,73 +227,101 @@ private:
 
 	friend class Lordi;
 
+	// Singleton
 	static std::shared_ptr<Graphics> s_pInstance;
 
-	const std::vector<const char*> cRequiredValidationLayers = { "VK_LAYER_KHRONOS_validation" };
-	const std::vector<const char*> cRequiredDeviceExtensions = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+	// Parameters
+	const int m_ciMaxFramesInFlight = 2; // 2 - double buffering, 3 - tripple bufferingw
+	std::vector<const char*> m_vRequiredValidationLayerNames = { "VK_LAYER_KHRONOS_validation" };
+	std::vector<const char*> m_vRequiredDeviceExtensionNames = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 
+	// Window/surface
 	bool m_bFramebufferResized = false;
 	GLFWwindow* m_pWindow = nullptr;
-	VkSurfaceKHR m_pWindowSurface = nullptr;
+	vk::SurfaceKHR m_pSurface = nullptr;
 
-	VkInstance m_pVulkanInstance = nullptr;
-	std::unique_ptr<std::vector<VkExtensionProperties>> m_pInstanceExtensions = nullptr;
-	std::unique_ptr<std::vector<VkLayerProperties>> m_pInstanceLayers = nullptr;
+	// Vulkan instance
+	vk::Instance m_pVulkanInstance = nullptr;
+	std::vector<vk::ExtensionProperties> m_vVulkanExtensionProps = {};
+	std::vector<vk::LayerProperties> m_vVulkanLayerProps = {};
 
-	VkDebugUtilsMessengerCreateInfoEXT m_DebugCreateInfo = {};
-	VkDebugUtilsMessengerEXT m_pDebugMessenger = nullptr;
+	// Debug
+	vk::DebugUtilsMessengerCreateInfoEXT m_sDebugCreateInfo = {};
+	vk::DebugUtilsMessengerEXT m_pDebugMessenger = nullptr;
 
-	VkPhysicalDevice m_pPhysicalDevice = nullptr; 
-	std::unique_ptr<std::vector<VkQueueFamilyProperties>> m_pPhysicalDeviceQueueFamiliesProperties = nullptr;
-	VkPhysicalDeviceFeatures m_PhysicalDeviceFeatures = {};
-	VkPhysicalDeviceMemoryProperties m_PhysicalDeviceMemoryProperties = {};
-	VkPhysicalDeviceProperties m_PhysicalDeviceProperties = {};
-	std::unique_ptr<std::vector<VkExtensionProperties>> m_pPhysicalDeviceExtensions = nullptr;
+	// Physical device
+	vk::PhysicalDevice m_pPhysicalDevice = nullptr; 
+	std::vector<vk::QueueFamilyProperties> m_vPhysicalDeviceQueueFamiliesProps = {};
 	uint32_t m_uiDeviceGraphicsIndex = 0;
 	uint32_t m_uiDevicePresentIndex = 0;
 	uint32_t m_uiDeviceTransferIndex = 0;
+	vk::PhysicalDeviceFeatures m_sPhysicalDeviceFeatures = {};
+	vk::PhysicalDeviceMemoryProperties m_sPhysicalDeviceMemoryProps = {};
+	vk::PhysicalDeviceProperties m_sPhysicalDeviceProps = {};
+	std::vector<vk::ExtensionProperties> m_vPhysicalDeviceExtensions = {};
 
-	VkDevice m_pLogicalDevice = nullptr;
-	VkQueue m_pGraphicsQueue = nullptr;
-	VkQueue m_pPresentQueue = nullptr;
-	VkQueue m_pTransferQueue = nullptr;
+	// Logical device
+	vk::Device m_pLogicalDevice = nullptr;
 
-	VkSwapchainKHR m_pSwapChain = nullptr;
-	std::unique_ptr<std::vector<VkImage>> m_pSwapChainImages = nullptr;
-	std::unique_ptr<std::vector<VkImageView>> m_pSwapChainImageViews = nullptr;
-	VkSurfaceCapabilitiesKHR m_SwapChainCapabilities = {};
-	std::unique_ptr<std::vector<VkSurfaceFormatKHR>> m_pSwapChainFormats = nullptr;
-	std::unique_ptr<std::vector<VkPresentModeKHR>> m_pSwapChainPresentModes = nullptr;
-	VkSwapchainCreateInfoKHR m_SwapChainCreateInfo = {};
+	// Device queues
+	vk::Queue m_pGraphicsQueue = nullptr;
+	vk::Queue m_pPresentQueue = nullptr;
+	vk::Queue m_pTransferQueue = nullptr;
 
-	VkShaderModule m_pVertexShaderModule = nullptr;
-	VkShaderModule m_pFragmentShaderModule = nullptr;
-	VkSampleCountFlagBits m_eMaxMSAA = VK_SAMPLE_COUNT_1_BIT;
-	VkSampleCountFlagBits m_eUserMSAA = VK_SAMPLE_COUNT_1_BIT;
-	VkRenderPass m_pRenderPass = nullptr;
-	VkDescriptorSetLayout m_pDescriptorSetLayout = nullptr;
-	VkPipelineLayout m_pPipelineLayout = nullptr;
-	VkPipeline m_pGraphicsPipeline = nullptr;
-	std::unique_ptr<std::vector<VkFramebuffer>> m_pFrameBuffers = nullptr;
-	VkCommandPool m_pDrawingCommandPool = nullptr;
-	VkCommandPool m_pTransferCommandPool = nullptr;
-	std::unique_ptr<std::vector<VkCommandBuffer>> m_pCommandBuffers = nullptr;
-	
-	std::unique_ptr<std::vector<VkSemaphore>> m_pImageAvailableSemaphores = nullptr;
-	std::unique_ptr<std::vector<VkSemaphore>> m_pRenderFinishedSemaphores = nullptr;
-	std::unique_ptr<std::vector<VkFence>> m_pFrameInFlightFences = nullptr;
-	const int cMaxFramesInFlight = 2;
+	// Swapchain
+	vk::SwapchainKHR m_pSwapChain = nullptr;
+	vk::SwapchainCreateInfoKHR m_sSwapChainInfo = {};
+	std::vector<vk::Image> m_vSwapChainImages = {};
+	std::vector<vk::ImageView> m_vSwapChainImageViews = {};
+	vk::SurfaceCapabilitiesKHR m_sSwapChainCapabilities = {};
+	std::vector<vk::SurfaceFormatKHR> m_vSwapChainFormats = {};
+	std::vector<vk::PresentModeKHR> m_vSwapChainPresentModes = {};
+	vk::PresentModeKHR m_eUserPresentMode = vk::PresentModeKHR::eFifo;
+
+	// Shaders
+	vk::ShaderModule m_pVertexShaderModule = nullptr;
+	vk::ShaderModule m_pFragmentShaderModule = nullptr;
+
+	// Render pass
+	vk::RenderPass m_pRenderPass = nullptr;
+	vk::SampleCountFlagBits m_eMaxMSAA = vk::SampleCountFlagBits::e1;
+	vk::SampleCountFlagBits m_eUserMSAA = vk::SampleCountFlagBits::e1;
+	vk::DescriptorSetLayout m_pDescriptorSetLayout = nullptr;
+
+	// Pipeline
+	vk::Pipeline m_pGraphicsPipeline = nullptr;
+	vk::PipelineLayout m_pPipelineLayout = nullptr;
+
+	// Command pools
+	vk::CommandPool m_pDrawingCommandPool = nullptr;
+	vk::CommandPool m_pTransferCommandPool = nullptr;
+
+	// Sync objects
+	std::vector<vk::Semaphore> m_vImageAvailableSemaphores = {};
+	std::vector<vk::Semaphore> m_vRenderFinishedSemaphores = {};
+	std::vector<vk::Fence> m_vFrameInFlightFences = {};
 	uint32_t m_uiCurrentFrame = 0;
 
-	VkBuffer m_pVertexBuffer = nullptr;
-	VkDeviceMemory m_pVertexBufferMemory = nullptr;
-	VkBuffer m_pIndexBuffer = nullptr;
-	VkDeviceMemory m_pIndexBufferMemory = nullptr;
+	// Frame buffers
+	std::vector<vk::Framebuffer> m_vFrameBuffers = {};
 
-	std::unique_ptr<std::vector<VkBuffer>> m_pUniformBuffers;
-	std::unique_ptr<std::vector<VkDeviceMemory>> m_pUniformBuffersMemory;
-	std::unique_ptr<std::vector<void*>> m_pUniformBuffersMapped;
+	// Vertex buffer
+	vk::Buffer m_pVertexBuffer = nullptr;
+	vk::DeviceMemory m_pVertexBufferMemory = nullptr;
 
-	VkDescriptorPool m_pDescriptorPool = nullptr;
-	std::unique_ptr<std::vector<VkDescriptorSet>> m_pDescriptorSets = nullptr;
+	// Index buffer
+	vk::Buffer m_pIndexBuffer = nullptr;
+	vk::DeviceMemory m_pIndexBufferMemory = nullptr;
+
+	// Command buffers
+	std::vector<vk::CommandBuffer> m_vCommandBuffers = {};
+
+	// Uniform buffers
+	std::vector<vk::Buffer> m_vUniformBuffers = {};
+	std::vector<vk::DeviceMemory> m_vUniformBuffersMemory = {};
+	std::vector<void*> m_vUniformBuffersMapped = {};
+
+	// Descriptor sets
+	vk::DescriptorPool m_pDescriptorPool = nullptr;
+	std::vector<vk::DescriptorSet> m_vDescriptorSets = {};
 };
