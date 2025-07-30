@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stb_image.h>
 
 #define VK_USE_PLATFORM_WIN32_KHR
 #define GLFW_INCLUDE_VULKAN
@@ -21,7 +22,7 @@
 #include <set>			// std::set
 #include <algorithm>	// std::clamp
 #include <array>		// std::array
-#include <chrono>		// time
+#include <chrono>		// std::chrono
 
 #include "Utility.h"
 #include "Logger.h"
@@ -148,6 +149,7 @@ struct Vertex
 {
 	glm::vec2 position;
 	glm::vec3 color;
+	glm::vec2 texCoord;
 };
 
 struct UniformBufferObject
@@ -158,10 +160,10 @@ struct UniformBufferObject
 };
 
 const std::vector<Vertex> vertices = {
-	{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}},
-	{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}},
-	{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}},
-	{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}}
+	{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
+	{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
+	{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
+	{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
 };
 
 const std::vector<uint16_t> indices = {
@@ -181,6 +183,14 @@ private:
 	Graphics();
 	static std::shared_ptr<Graphics> Get();
 
+	// Create GLFW window
+	void InitializeWindow();
+
+	// Create a Vulkan instance, specifying Vulkan API version, which extensions and layers we want to use, debug settings
+	void GetVulkanData();
+	void CreateVulkanInstance();
+	void CleanupVulkan();
+
 	// Check if cRequiredValidationLayers layers are present in Vulkan's instance layers for debugging purposes
 	bool IsDebugSupported();
 	// Start Vulkan debugger
@@ -189,41 +199,60 @@ private:
 	void CleanupDebugger();
 	// Debug messages sent here to be printed to console
 	static VKAPI_ATTR vk::Bool32 VKAPI_CALL DebugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT messageSeverity, vk::DebugUtilsMessageTypeFlagsEXT messageType, const vk::DebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
-	// Create GLFW window
-	void InitializeWindow();
-	// Window/framebuffer resizes are sent here
-	static void FramebufferResizeCallback(GLFWwindow* window, int width, int height);
+	
 	// Create a Vulkan surface from our GLFW window
 	void CreateWindowSurface();
-	// Create a Vulkan instance, specifying Vulkan API version, which extensions and layers we want to use, debug settings
-	void CreateVulkanInstance();
-	void CleanupVulkan();
-	void GetVulkanData();
-	bool IsDeviceSuitable(const vk::PhysicalDevice& device);
+	// Window/framebuffer resizes are sent here
+	static void FramebufferResizeCallback(GLFWwindow* window, int width, int height);
+
 	void PickPhysicalDevice();
+	bool IsDeviceSuitable(const vk::PhysicalDevice& device);
 	void CreateLogicalDevice();
+
 	void CreateSwapChain();
+	void RecreateSwapChain();
 	void CreateImageViews();
+	void CleanupSwapChain();
+
 	void CreateRenderPass();
+
 	void CreateGraphicsPipeline();
+
 	void CreateFrameBuffers();
+
 	void CreateCommandPools();
 	void CreateCommandBuffers();
-	void RecordCommandBuffer(const vk::CommandBuffer& commandBuffer, uint32_t imageIndex);
-	void DrawFrame();
-	void CreateSyncObjects();
-	void RecreateSwapChain();
-	void CleanupSwapChain();
-	void CreateVertexBuffer();
-	void CreateIndexBuffer();
+	void RecordCommandBuffer(const vk::CommandBuffer& commandBuffer, const vk::Framebuffer& frameBuffer);
+	vk::CommandBuffer BeginSingleTimeCommands();
+	void EndSingleTimeCommands(vk::CommandBuffer commandBuffer);
+
 	uint32_t FindMemoryTypeIndex(uint32_t memoryType, vk::MemoryPropertyFlags memoryProperties);
 	void CreateBuffer(vk::DeviceSize bufferSize, vk::BufferUsageFlags bufferUsageFlags, vk::MemoryPropertyFlags memoryPropertyFlags, vk::Buffer& buffer, vk::DeviceMemory& deviceMemory);
 	void CopyBuffer(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize bufferSize);
-	void CreateDescriptorSetLayout();
+
+	void CreateVertexBuffer();
+	void CreateIndexBuffer();
+
 	void CreateUniformBuffers();
 	void UpdateUniformBuffer(uint32_t currentImage);
+
+	void CreateDescriptorSetLayout();
 	void CreateDescriptorPool();
 	void CreateDescriptorSets();
+
+	void CreateSyncObjects();
+
+	void DrawFrame();
+
+	void CreateImage(uint32_t imageWidth, uint32_t imageHeight, vk::Format imageFormat, vk::ImageTiling imageTiling,
+		vk::ImageUsageFlags imageUsage, vk::MemoryPropertyFlags imageProperties, vk::Image& image, vk::DeviceMemory& imageMemory);
+	vk::ImageView CreateImageView(vk::Image image, vk::Format format);
+	void TransitionImageLayout(vk::Image image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout);
+	void CopyBufferToImage(vk::Buffer buffer, vk::Image image, uint32_t imageWidth, uint32_t imageHeight);
+
+	void CreateTextureImage();
+	void CreateTextureImageView();
+	void CreateTextureSampler();
 
 	friend class Lordi;
 
@@ -231,7 +260,7 @@ private:
 	static std::shared_ptr<Graphics> s_pInstance;
 
 	// Parameters
-	const int m_ciMaxFramesInFlight = 2; // 2 - double buffering, 3 - tripple bufferingw
+	const int m_ciMaxFramesInFlight = 2; // 2 - double buffering, 3 - triple buffering
 	std::vector<const char*> m_vRequiredValidationLayerNames = { "VK_LAYER_KHRONOS_validation" };
 	std::vector<const char*> m_vRequiredDeviceExtensionNames = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
 
@@ -275,6 +304,7 @@ private:
 	std::vector<vk::ImageView> m_vSwapChainImageViews = {};
 	vk::SurfaceCapabilitiesKHR m_sSwapChainCapabilities = {};
 	std::vector<vk::SurfaceFormatKHR> m_vSwapChainFormats = {};
+	vk::SurfaceFormatKHR m_sSwapChainFormat = {};
 	std::vector<vk::PresentModeKHR> m_vSwapChainPresentModes = {};
 	vk::PresentModeKHR m_eUserPresentMode = vk::PresentModeKHR::eFifo;
 
@@ -324,4 +354,10 @@ private:
 	// Descriptor sets
 	vk::DescriptorPool m_pDescriptorPool = nullptr;
 	std::vector<vk::DescriptorSet> m_vDescriptorSets = {};
+
+	// Textures
+	vk::Image m_pTextureImage = nullptr;
+	vk::DeviceMemory m_pTextureImageMemory = nullptr;
+	vk::ImageView m_pTextureImageView = nullptr;
+	vk::Sampler m_pTextureSampler = nullptr;
 };
