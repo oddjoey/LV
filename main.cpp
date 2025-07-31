@@ -9,8 +9,8 @@ int main()
 	graphicsSettings.sWindowName = "Lordi Engine";
 	graphicsSettings.uiWindowWidth = 800;
 	graphicsSettings.uiWindowHeight = 600;
-	graphicsSettings.eVSync = VSyncOptions::MAILBOX;
-	graphicsSettings.eColorBlending = ColorBlendingOptions::NONE;
+	graphicsSettings.eVSync = VSyncOptions::NONE;
+	graphicsSettings.eColorBlending = ColorBlendingOptions::MIX;
 	graphicsSettings.eMSAA = MSAAOptions::X1;
 
 	settings->SetSettings(graphicsSettings);

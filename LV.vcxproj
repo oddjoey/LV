@@ -72,15 +72,21 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
+    <IncludePath>D:\Programming\Libraries\glfw\glfw\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
+    <IncludePath>D:\Programming\Libraries\glfw\glfw\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
+    <IncludePath>D:\Programming\Libraries\glfw\glfw\include;$(IncludePath)</IncludePath>
+    <LibraryPath>D:\Programming\Libraries\glfw\build\src\Debug;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
+    <IncludePath>D:\Programming\Libraries\glfw\glfw\include;$(IncludePath)</IncludePath>
+    <LibraryPath>D:\Programming\Libraries\glfw\build\src\Release;$(LibraryPath)</LibraryPath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -88,7 +94,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Programming\Libraries\glfw-3.3.9.bin.WIN64\include;D:\Programming\Libraries\glm;D:\Programming\Libraries\Vulkan-SDK\Include;D:\Programming\Libraries\termcolor;D:\Programming\Libraries\magic_enum-v0.9.7\include;D:\Programming\Libraries\stb_image;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\Programming\Libraries\glm;D:\Programming\Libraries\Vulkan-SDK\Include;D:\Programming\Libraries\termcolor;D:\Programming\Libraries\magic_enum-v0.9.7\include;D:\Programming\Libraries\stb_image;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
@@ -108,7 +114,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Programming\Libraries\glfw-3.3.9.bin.WIN64\include;D:\Programming\Libraries\glm;D:\Programming\Libraries\Vulkan-SDK\Include;D:\Programming\Libraries\termcolor;D:\Programming\Libraries\magic_enum-v0.9.7\include;D:\Programming\Libraries\stb_image;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\Programming\Libraries\glm;D:\Programming\Libraries\Vulkan-SDK\Include;D:\Programming\Libraries\termcolor;D:\Programming\Libraries\magic_enum-v0.9.7\include;D:\Programming\Libraries\stb_image;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
@@ -128,7 +134,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Programming\Libraries\glfw-3.3.9.bin.WIN64\include;D:\Programming\Libraries\glm;D:\Programming\Libraries\Vulkan-SDK\Include;D:\Programming\Libraries\termcolor;D:\Programming\Libraries\magic_enum-v0.9.7\include;D:\Programming\Libraries\stb_image;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\Programming\Libraries\glm;D:\Programming\Libraries\Vulkan-SDK\Include;D:\Programming\Libraries\termcolor;D:\Programming\Libraries\magic_enum-v0.9.7\include;D:\Programming\Libraries\stb_image;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
@@ -148,7 +154,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Programming\Libraries\glfw-3.3.9.bin.WIN64\include;D:\Programming\Libraries\glm;D:\Programming\Libraries\Vulkan-SDK\Include;D:\Programming\Libraries\termcolor;D:\Programming\Libraries\magic_enum-v0.9.7\include;D:\Programming\Libraries\stb_image;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\Programming\Libraries\glm;D:\Programming\Libraries\Vulkan-SDK\Include;D:\Programming\Libraries\termcolor;D:\Programming\Libraries\magic_enum-v0.9.7\include;D:\Programming\Libraries\stb_image;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>

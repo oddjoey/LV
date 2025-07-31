@@ -40,13 +40,13 @@ bool Lordi::InitializeSystems()
 
 void Lordi::MainLoop()
 {
-	while (!glfwWindowShouldClose(GetGraphics()->m_pWindow))
+	while (!glfwWindowShouldClose(GetGraphics()->m_window))
 	{
 		glfwPollEvents();
 		GetGraphics()->DrawFrame();
 	}
 
-	vkDeviceWaitIdle(GetGraphics()->m_pLogicalDevice);
+	vkDeviceWaitIdle(GetGraphics()->m_logicalDevice);
 }
 
 std::shared_ptr<Graphics> Lordi::GetGraphics() const

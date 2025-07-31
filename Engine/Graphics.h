@@ -9,6 +9,7 @@
 #include <GLFW/glfw3native.h>
 
 #define GLM_FORCE_RADIANS
+#define GLM_FORCE_DEPTH_ZERO_TO_ONE
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
@@ -147,7 +148,7 @@
 
 struct Vertex
 {
-	glm::vec2 position;
+	glm::vec3 position;
 	glm::vec3 color;
 	glm::vec2 texCoord;
 };
@@ -160,14 +161,20 @@ struct UniformBufferObject
 };
 
 const std::vector<Vertex> vertices = {
-	{{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
-	{{0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 0.0f}},
-	{{0.5f, 0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 1.0f}},
-	{{-0.5f, 0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}}
+	{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+	{{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+	{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+	{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
+
+	{{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
+	{{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
+	{{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
+	{{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
 };
 
 const std::vector<uint16_t> indices = {
-	0, 1, 2, 2, 3, 0
+	0, 1, 2, 2, 3, 0,
+	4, 5, 6, 6, 7, 4
 };
 
 class Graphics
@@ -205,159 +212,188 @@ private:
 	// Window/framebuffer resizes are sent here
 	static void FramebufferResizeCallback(GLFWwindow* window, int width, int height);
 
+	// Physical device
 	void PickPhysicalDevice();
 	bool IsDeviceSuitable(const vk::PhysicalDevice& device);
 	void CreateLogicalDevice();
 
+	// Swap chain
 	void CreateSwapChain();
 	void RecreateSwapChain();
 	void CreateImageViews();
 	void CleanupSwapChain();
 
+	// Render pass
 	void CreateRenderPass();
 
+	// Pipeline
 	void CreateGraphicsPipeline();
 
+	// Frame buffers
 	void CreateFrameBuffers();
 
+	// Command buffers
 	void CreateCommandPools();
 	void CreateCommandBuffers();
 	void RecordCommandBuffer(const vk::CommandBuffer& commandBuffer, const vk::Framebuffer& frameBuffer);
 	vk::CommandBuffer BeginSingleTimeCommands();
 	void EndSingleTimeCommands(vk::CommandBuffer commandBuffer);
 
+	// Buffer helper functions
 	uint32_t FindMemoryTypeIndex(uint32_t memoryType, vk::MemoryPropertyFlags memoryProperties);
 	void CreateBuffer(vk::DeviceSize bufferSize, vk::BufferUsageFlags bufferUsageFlags, vk::MemoryPropertyFlags memoryPropertyFlags, vk::Buffer& buffer, vk::DeviceMemory& deviceMemory);
 	void CopyBuffer(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize bufferSize);
 
+	// Vertex/index buffers
 	void CreateVertexBuffer();
 	void CreateIndexBuffer();
 
+	// Uniform buffers
 	void CreateUniformBuffers();
 	void UpdateUniformBuffer(uint32_t currentImage);
 
+	// Descriptors
 	void CreateDescriptorSetLayout();
 	void CreateDescriptorPool();
 	void CreateDescriptorSets();
 
+	// Sync
 	void CreateSyncObjects();
 
 	void DrawFrame();
 
-	void CreateImage(uint32_t imageWidth, uint32_t imageHeight, vk::Format imageFormat, vk::ImageTiling imageTiling,
-		vk::ImageUsageFlags imageUsage, vk::MemoryPropertyFlags imageProperties, vk::Image& image, vk::DeviceMemory& imageMemory);
-	vk::ImageView CreateImageView(vk::Image image, vk::Format format);
+	// Image helper functions
+	vk::Image CreateImage(uint32_t imageWidth, uint32_t imageHeight, vk::Format imageFormat, vk::ImageTiling imageTiling,
+		vk::ImageUsageFlags imageUsage, vk::MemoryPropertyFlags memoryProperties, vk::DeviceMemory& imageMemory);
+	vk::ImageView CreateImageView(vk::Image image, vk::Format format, vk::ImageAspectFlags aspectFlags);
 	void TransitionImageLayout(vk::Image image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout);
 	void CopyBufferToImage(vk::Buffer buffer, vk::Image image, uint32_t imageWidth, uint32_t imageHeight);
+	bool HasStencilComponent(vk::Format format);
 
+	// Texture
 	void CreateTextureImage();
 	void CreateTextureImageView();
 	void CreateTextureSampler();
 
+	// Depth
+	void CreateDepthResources();
+
 	friend class Lordi;
 
 	// Singleton
-	static std::shared_ptr<Graphics> s_pInstance;
-
+	static std::shared_ptr<Graphics> s_instance;
+	
 	// Parameters
-	const int m_ciMaxFramesInFlight = 2; // 2 - double buffering, 3 - triple buffering
-	std::vector<const char*> m_vRequiredValidationLayerNames = { "VK_LAYER_KHRONOS_validation" };
-	std::vector<const char*> m_vRequiredDeviceExtensionNames = { VK_KHR_SWAPCHAIN_EXTENSION_NAME };
+	vk::PresentModeKHR m_userPresentMode = vk::PresentModeKHR::eFifo;
+	vk::SampleCountFlagBits m_maxMSAA = vk::SampleCountFlagBits::e1;
+	vk::SampleCountFlagBits m_userMSAA = vk::SampleCountFlagBits::e1;
+	std::vector<const char*> m_requiredValidationLayerNames = {
+		"VK_LAYER_KHRONOS_validation"
+	};
+	std::vector<const char*> m_requiredDeviceExtensionNames = { 
+		VK_KHR_SWAPCHAIN_EXTENSION_NAME
+	};
 
 	// Window/surface
-	bool m_bFramebufferResized = false;
-	GLFWwindow* m_pWindow = nullptr;
-	vk::SurfaceKHR m_pSurface = nullptr;
+	bool m_framebufferResized = false;
+	GLFWwindow* m_window = nullptr;
+	vk::SurfaceKHR m_windowSurface = {};
 
 	// Vulkan instance
-	vk::Instance m_pVulkanInstance = nullptr;
-	std::vector<vk::ExtensionProperties> m_vVulkanExtensionProps = {};
-	std::vector<vk::LayerProperties> m_vVulkanLayerProps = {};
+	vk::Instance m_vulkanInstance = {};
+	std::vector<vk::ExtensionProperties> m_vulkanExtensionProps = {};
+	std::vector<vk::LayerProperties> m_vulkanLayerProps = {};
 
 	// Debug
-	vk::DebugUtilsMessengerCreateInfoEXT m_sDebugCreateInfo = {};
-	vk::DebugUtilsMessengerEXT m_pDebugMessenger = nullptr;
+	vk::DebugUtilsMessengerCreateInfoEXT m_debugCreateInfo = {};
+	vk::DebugUtilsMessengerEXT m_debugMessenger = {};
 
 	// Physical device
-	vk::PhysicalDevice m_pPhysicalDevice = nullptr; 
-	std::vector<vk::QueueFamilyProperties> m_vPhysicalDeviceQueueFamiliesProps = {};
-	uint32_t m_uiDeviceGraphicsIndex = 0;
-	uint32_t m_uiDevicePresentIndex = 0;
-	uint32_t m_uiDeviceTransferIndex = 0;
-	vk::PhysicalDeviceFeatures m_sPhysicalDeviceFeatures = {};
-	vk::PhysicalDeviceMemoryProperties m_sPhysicalDeviceMemoryProps = {};
-	vk::PhysicalDeviceProperties m_sPhysicalDeviceProps = {};
-	std::vector<vk::ExtensionProperties> m_vPhysicalDeviceExtensions = {};
+	vk::PhysicalDevice m_physicalDevice = {};
+	std::vector<vk::QueueFamilyProperties> m_physicalDeviceQueueFamiliesProps = {};
+	uint32_t m_physicalDeviceGraphicsIndex = 0;
+	uint32_t m_physicalDevicePresentIndex = 0;
+	uint32_t m_physicalDeviceTransferIndex = 0;
+	vk::PhysicalDeviceFeatures m_physicalDeviceFeatures = {};
+	vk::PhysicalDeviceFeatures2 m_physicalDeviceFeatures2 = {};
+	vk::PhysicalDeviceVulkan12Features m_physicalDeviceVK12Features = {};
+	vk::PhysicalDeviceProperties m_physicalDeviceProps = {};
+	vk::PhysicalDeviceMemoryProperties m_physicalDeviceMemoryProps = {};
+	std::vector<vk::ExtensionProperties> m_physicalDeviceExtensions = {};
 
 	// Logical device
-	vk::Device m_pLogicalDevice = nullptr;
+	vk::Device m_logicalDevice = {};
 
 	// Device queues
-	vk::Queue m_pGraphicsQueue = nullptr;
-	vk::Queue m_pPresentQueue = nullptr;
-	vk::Queue m_pTransferQueue = nullptr;
+	vk::Queue m_queueGraphics = {};
+	vk::Queue m_queuePresent = {};
+	vk::Queue m_queueTransfer = {};
 
-	// Swapchain
-	vk::SwapchainKHR m_pSwapChain = nullptr;
-	vk::SwapchainCreateInfoKHR m_sSwapChainInfo = {};
-	std::vector<vk::Image> m_vSwapChainImages = {};
-	std::vector<vk::ImageView> m_vSwapChainImageViews = {};
-	vk::SurfaceCapabilitiesKHR m_sSwapChainCapabilities = {};
-	std::vector<vk::SurfaceFormatKHR> m_vSwapChainFormats = {};
-	vk::SurfaceFormatKHR m_sSwapChainFormat = {};
-	std::vector<vk::PresentModeKHR> m_vSwapChainPresentModes = {};
-	vk::PresentModeKHR m_eUserPresentMode = vk::PresentModeKHR::eFifo;
+	// Swap chain
+	vk::SwapchainKHR m_swapChain = {};
+	vk::SwapchainCreateInfoKHR m_swapChainInfo = {};
+	std::vector<vk::Image> m_swapChainImages = {};
+	std::vector<vk::ImageView> m_swapChainImageViews = {};
+	vk::SurfaceCapabilitiesKHR m_swapChainCapabilities = {};
+	std::vector<vk::SurfaceFormatKHR> m_swapChainFormats = {};
+	vk::SurfaceFormatKHR m_swapChainFormat = {};
+	std::vector<vk::PresentModeKHR> m_swapChainPresentModes = {};
 
 	// Shaders
-	vk::ShaderModule m_pVertexShaderModule = nullptr;
-	vk::ShaderModule m_pFragmentShaderModule = nullptr;
+	vk::ShaderModule m_shaderModuleVertex = {};
+	vk::ShaderModule m_shaderModuleFragment = {};
 
 	// Render pass
-	vk::RenderPass m_pRenderPass = nullptr;
-	vk::SampleCountFlagBits m_eMaxMSAA = vk::SampleCountFlagBits::e1;
-	vk::SampleCountFlagBits m_eUserMSAA = vk::SampleCountFlagBits::e1;
-	vk::DescriptorSetLayout m_pDescriptorSetLayout = nullptr;
+	vk::RenderPass m_renderPass = {};
 
 	// Pipeline
-	vk::Pipeline m_pGraphicsPipeline = nullptr;
-	vk::PipelineLayout m_pPipelineLayout = nullptr;
+	vk::PipelineLayout m_pipelineLayout = {};
+	vk::Pipeline m_pipelineGraphics = {};
 
 	// Command pools
-	vk::CommandPool m_pDrawingCommandPool = nullptr;
-	vk::CommandPool m_pTransferCommandPool = nullptr;
+	vk::CommandPool m_commandPoolDraw = {};
+	vk::CommandPool m_commandPoolTransfer = {};
 
 	// Sync objects
-	std::vector<vk::Semaphore> m_vImageAvailableSemaphores = {};
-	std::vector<vk::Semaphore> m_vRenderFinishedSemaphores = {};
-	std::vector<vk::Fence> m_vFrameInFlightFences = {};
-	uint32_t m_uiCurrentFrame = 0;
+	const int m_maxFramesInFlight = 2; // 2 - double buffering, 3 - triple buffering
+	std::vector<vk::Semaphore> m_imageAvailableSemaphores = {};
+	std::vector<vk::Semaphore> m_renderFinishedSemaphores = {};
+	std::vector<vk::Fence> m_frameInFlightFences = {};
+	uint32_t m_frameInFlightIndex = 0;
 
 	// Frame buffers
-	std::vector<vk::Framebuffer> m_vFrameBuffers = {};
+	std::vector<vk::Framebuffer> m_frameBuffers = {};
 
 	// Vertex buffer
-	vk::Buffer m_pVertexBuffer = nullptr;
-	vk::DeviceMemory m_pVertexBufferMemory = nullptr;
+	vk::Buffer m_vertexBuffer = {};
+	vk::DeviceMemory m_vertexBufferMemory = {};
 
 	// Index buffer
-	vk::Buffer m_pIndexBuffer = nullptr;
-	vk::DeviceMemory m_pIndexBufferMemory = nullptr;
+	vk::Buffer m_indexBuffer = {};
+	vk::DeviceMemory m_indexBufferMemory = {};
 
 	// Command buffers
-	std::vector<vk::CommandBuffer> m_vCommandBuffers = {};
+	std::vector<vk::CommandBuffer> m_commandBuffers = {};
 
 	// Uniform buffers
-	std::vector<vk::Buffer> m_vUniformBuffers = {};
-	std::vector<vk::DeviceMemory> m_vUniformBuffersMemory = {};
-	std::vector<void*> m_vUniformBuffersMapped = {};
+	std::vector<vk::Buffer> m_uniformBuffers = {};
+	std::vector<vk::DeviceMemory> m_uniformBuffersMemory = {};
+	std::vector<void*> m_uniformBuffersMapped = {};
 
 	// Descriptor sets
-	vk::DescriptorPool m_pDescriptorPool = nullptr;
-	std::vector<vk::DescriptorSet> m_vDescriptorSets = {};
+	vk::DescriptorSetLayout m_descriptorSetLayout = {};
+	vk::DescriptorPool m_descriptorPool = {};
+	std::vector<vk::DescriptorSet> m_descriptorSets = {};
 
 	// Textures
-	vk::Image m_pTextureImage = nullptr;
-	vk::DeviceMemory m_pTextureImageMemory = nullptr;
-	vk::ImageView m_pTextureImageView = nullptr;
-	vk::Sampler m_pTextureSampler = nullptr;
+	vk::Image m_textureImage = {};
+	vk::DeviceMemory m_textureImageMemory = {};
+	vk::ImageView m_textureImageView = {};
+	vk::Sampler m_textureSampler = {};
+
+	// Depth
+	vk::Image m_depthImage = {};
+	vk::DeviceMemory m_depthImageMemory = {};
+	vk::ImageView m_depthImageView = {};
+	vk::Format m_depthImageFormat = {};
 };
