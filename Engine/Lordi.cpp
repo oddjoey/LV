@@ -17,21 +17,21 @@ Lordi::Lordi()
 
 Lordi::~Lordi()
 {
+
 }
 
 bool Lordi::InitializeSystems()
 {
 	LOG_INFO("Initializing Lordi's systems...");
+	Graphics::Get();
 
-	try
-	{
-		Graphics::Get()->Initialize();
-	}
-	catch (const std::exception& e)
-	{
-		LOG_FATAL(std::string(e.what()));
-		return false;
-	}
+	Model model = { "Engine/Graphics/Resources/viking_room.obj", "" };
+
+	ModelManager::Get()->AddModel(model);
+	ModelManager::Get()->InitializeModelsToMemory();
+
+	ObjectManager::Get();
+	Renderer::Get();
 
 	LOG_SUCCESS("Lordi's systems initialized successfully!");
 	 
@@ -40,10 +40,12 @@ bool Lordi::InitializeSystems()
 
 void Lordi::MainLoop()
 {
+	auto renderer = Renderer::Get();
+
 	while (!glfwWindowShouldClose(GetGraphics()->m_window))
 	{
 		glfwPollEvents();
-		GetGraphics()->DrawFrame();
+		renderer->RenderFrame();
 	}
 
 	vkDeviceWaitIdle(GetGraphics()->m_logicalDevice);
@@ -66,14 +68,19 @@ void Lordi::Initialize()
 #ifdef _DEBUG
 	// memory leak detection
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
-	LOG_DEBUG("Memory leak dectection enabled!");
+	LOG_DEBUG("Memory leak detection enabled!");
 #endif // _DEBUG
 
-	if (!InitializeSystems())
+	try
 	{
-		LOG_FATAL("Failed to start Lordi.");
-		exit(EXIT_FAILURE);
-	}
+		if (!InitializeSystems())
+			throw std::runtime_error("Failed to start Lordi.");
 
-	MainLoop();
+		MainLoop();
+	}
+	catch (const std::exception& e)
+	{
+		LOG_FATAL(std::string(e.what()));
+		return;
+	}
 }

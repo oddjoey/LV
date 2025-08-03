@@ -17,16 +17,6 @@ std::shared_ptr<Graphics> Graphics::Get()
 
 Graphics::Graphics()
 {
-
-}
-
-Graphics::~Graphics()
-{
-	CleanupVulkan();
-}
-
-void Graphics::Initialize()
-{
 	LOG_INFO("Initializing Graphics...");
 
 	VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
@@ -67,8 +57,6 @@ void Graphics::Initialize()
 	CreateTextureImageView();
 	CreateTextureSampler();
 
-	CreateVertexBuffer();
-	CreateIndexBuffer();
 	CreateUniformBuffers();
 
 	CreateDescriptorPool();
@@ -79,6 +67,12 @@ void Graphics::Initialize()
 	CreateSyncObjects();
 
 	LOG_SUCCESS("Graphics initialized successfully!");
+}
+
+Graphics::~Graphics()
+{
+	
+	CleanupVulkan();
 }
 
 void Graphics::CreateVulkanInstance() {
@@ -424,7 +418,7 @@ void Graphics::CreateRenderPass()
 	vk::AttachmentDescription depthAttachment {
 		.flags = {},
 		.format = m_depthImageFormat,
-		.samples = vk::SampleCountFlagBits::e1,
+		.samples = m_userMSAA,
 		.loadOp = vk::AttachmentLoadOp::eClear,
 		.storeOp = vk::AttachmentStoreOp::eDontCare,
 		.stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
@@ -482,7 +476,7 @@ void Graphics::CreateGraphicsPipeline()
 	auto graphicsSettings = Settings::Get()->GetGraphicsSettings();
 
 	// Load shader byte code into memory
-	auto vertShaderCode = Utility::ReadFile("Engine/Shaders/Compiled/vert.spv");
+	auto vertShaderCode = Utility::ReadFile("Engine/Graphics/Shaders/Compiled/vert.spv");
 	vk::ShaderModuleCreateInfo vertShaderInfo{
 		.flags = {},
 		.codeSize = vertShaderCode.size(),
@@ -490,7 +484,7 @@ void Graphics::CreateGraphicsPipeline()
 	};
 	if (m_logicalDevice.createShaderModule(&vertShaderInfo, nullptr, &m_shaderModuleVertex) != vk::Result::eSuccess)
 		throw std::runtime_error("failed to create vertex shader module!");
-	auto fragShaderCode = Utility::ReadFile("Engine/Shaders/Compiled/frag.spv");
+	auto fragShaderCode = Utility::ReadFile("Engine/Graphics/Shaders/Compiled/frag.spv");
 	vk::ShaderModuleCreateInfo fragShaderInfo {
 		.flags = {},
 		.codeSize = fragShaderCode.size(),
@@ -752,71 +746,6 @@ void Graphics::CreateCommandBuffers()
 	LOG_SUCCESS("Created command buffer successfully!");
 }
 
-void Graphics::RecordCommandBuffer(const vk::CommandBuffer& commandBuffer, const vk::Framebuffer& frameBuffer)
-{
-	vk::CommandBufferBeginInfo beginInfo {
-		.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
-		.pInheritanceInfo = nullptr
-	};
-
-	if (commandBuffer.begin(&beginInfo) != vk::Result::eSuccess)
-		throw std::runtime_error("Failed begin on command buffer!");
-
-	vk::ClearValue clearColor {
-		.color = std::array<float, 4>{ 0.0f, 0.0f, 0.0f, 1.0f }
-	}; 
-	vk::ClearValue clearDepth {
-		.depthStencil = { 1.f, 0 }
-	};
-	std::vector<vk::ClearValue> clearValues = { clearColor, clearDepth };
-	vk::Rect2D renderArea {
-		.offset = {0, 0},
-		.extent = m_swapChainInfo.imageExtent
-	};
-	vk::RenderPassBeginInfo renderPassInfo {
-		.renderPass = m_renderPass,
-		.framebuffer = frameBuffer,
-		.renderArea = renderArea,
-		.clearValueCount = static_cast<uint32_t>(clearValues.size()),
-		.pClearValues = clearValues.data()
-	};
-	commandBuffer.beginRenderPass(&renderPassInfo, vk::SubpassContents::eInline);
-
-	commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, m_pipelineGraphics);
-
-	vk::Viewport viewport {
-		.x = 0.0f,
-		.y = 0.0f,
-		.width = static_cast<float>(m_swapChainInfo.imageExtent.width),
-		.height = static_cast<float>(m_swapChainInfo.imageExtent.height),
-		.minDepth = 0.0f,
-		.maxDepth = 1.0f
-	};
-	commandBuffer.setViewport(0, 1, &viewport);
-
-	vk::Rect2D scissor {
-		.offset = { 0, 0 },
-		.extent = m_swapChainInfo.imageExtent
-	};
-	commandBuffer.setScissor(0, 1, &scissor);
-
-	std::vector<vk::Buffer> vertexBuffers = { m_vertexBuffer };
-	std::vector<vk::DeviceSize> offsets = { 0 };
-	commandBuffer.bindVertexBuffers(0, 1, vertexBuffers.data(), offsets.data());
-
-	commandBuffer.bindIndexBuffer(m_indexBuffer, 0, vk::IndexType::eUint16);
-
-	UpdateUniformBuffer(m_frameInFlightIndex);
-	commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_pipelineLayout,
-		0, 1, &m_descriptorSets[m_frameInFlightIndex], 0, nullptr);
-
-	commandBuffer.drawIndexed(static_cast<uint32_t>(indices.size()), 1, 0, 0, 0);
-
-	commandBuffer.endRenderPass();
-
-	commandBuffer.end();
-}
-
 void Graphics::DrawFrame()
 {
 	if (m_logicalDevice.waitForFences(1, &m_frameInFlightFences[m_frameInFlightIndex], VK_TRUE, UINT64_MAX) != vk::Result::eSuccess)
@@ -839,7 +768,7 @@ void Graphics::DrawFrame()
 		throw std::runtime_error("resetFences failed!");
 
 	m_commandBuffers[m_frameInFlightIndex].reset();
-	RecordCommandBuffer(m_commandBuffers[m_frameInFlightIndex], m_frameBuffers[imageIndex]);
+	//RecordCommandBuffer(m_commandBuffers[m_frameInFlightIndex], m_frameBuffers[imageIndex]);
 
 	std::vector<vk::Semaphore> waitSemaphores = { m_imageAvailableSemaphores[m_frameInFlightIndex] };
 	std::vector<vk::PipelineStageFlags> waitStages = { vk::PipelineStageFlagBits::eColorAttachmentOutput }; 
@@ -957,52 +886,6 @@ void Graphics::CleanupSwapChain()
 	LOG_SUCCESS("Swapchain cleaned up successfully!");
 }
 
-void Graphics::CreateVertexBuffer()
-{
-	LOG_INFO("Creating vertex buffer...");
-
-	vk::DeviceSize bufferSize = sizeof(vertices[0]) * vertices.size();
-	vk::Buffer stagingBuffer = nullptr;
-	vk::DeviceMemory stagingBufferMemory = nullptr;
-	CreateBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, stagingBuffer, stagingBufferMemory);
-	
-	void* data;
-	if (m_logicalDevice.mapMemory(stagingBufferMemory, 0, bufferSize, {}, &data) != vk::Result::eSuccess)
-		throw std::runtime_error("failed to map staging memory for vertex buffer!");
-	memcpy(data, vertices.data(), static_cast<size_t>(bufferSize));
-	m_logicalDevice.unmapMemory(stagingBufferMemory);
-
-	CreateBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer, vk::MemoryPropertyFlagBits::eDeviceLocal, m_vertexBuffer, m_vertexBufferMemory);
-	CopyBuffer(stagingBuffer, m_vertexBuffer, bufferSize);
-	m_logicalDevice.destroyBuffer(stagingBuffer, nullptr);
-	m_logicalDevice.freeMemory(stagingBufferMemory, nullptr);
-
-	LOG_SUCCESS("Vertex buffer created successfully!");
-}
-
-void Graphics::CreateIndexBuffer()
-{
-	LOG_INFO("Creating index buffer...");
-
-	vk::DeviceSize bufferSize = sizeof(indices[0]) * indices.size();
-	vk::Buffer stagingBuffer;
-	vk::DeviceMemory stagingBufferMemory;
-	CreateBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, stagingBuffer, stagingBufferMemory);
-	
-	void* data;
-	if (m_logicalDevice.mapMemory(stagingBufferMemory, 0, bufferSize, {}, &data) != vk::Result::eSuccess)
-		throw std::runtime_error("failed to map staging memory to index buffer!");
-	memcpy(data, indices.data(), static_cast<size_t>(bufferSize));
-	m_logicalDevice.unmapMemory(stagingBufferMemory);
-
-	CreateBuffer(bufferSize, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer, vk::MemoryPropertyFlagBits::eDeviceLocal, m_indexBuffer, m_indexBufferMemory);
-	CopyBuffer(stagingBuffer, m_indexBuffer, bufferSize);
-	m_logicalDevice.destroyBuffer(stagingBuffer, nullptr);
-	m_logicalDevice.freeMemory(stagingBufferMemory, nullptr);
-
-	LOG_SUCCESS("Index buffer created successfully!");
-}
-
 uint32_t Graphics::FindMemoryTypeIndex(uint32_t memoryTypeBitMask, vk::MemoryPropertyFlags memoryProperties)
 {
 	LOG_INFO("Finding memory type...");
@@ -1020,7 +903,24 @@ uint32_t Graphics::FindMemoryTypeIndex(uint32_t memoryTypeBitMask, vk::MemoryPro
 	return 0;
 }
 
-void Graphics::CreateBuffer(vk::DeviceSize bufferSize, vk::BufferUsageFlags bufferUsageFlags, vk::MemoryPropertyFlags memoryPropertyFlags, vk::Buffer& buffer, vk::DeviceMemory& deviceMemory)
+void Graphics::MoveDataToDeviceBuffer(void* data, vk::DeviceSize size, vk::Buffer& buffer)
+{
+	vk::DeviceMemory stagingBufferMemory;
+	vk::Buffer stagingBuffer = CreateBuffer(size, vk::BufferUsageFlagBits::eTransferSrc,
+		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, stagingBufferMemory);
+
+	void* mappedData = nullptr;
+	if (m_logicalDevice.mapMemory(stagingBufferMemory, 0, size, {}, &mappedData) != vk::Result::eSuccess)
+		throw std::runtime_error("failed to map staging memory for vertex buffer!");
+	memcpy(mappedData, data, static_cast<size_t>(size));
+	m_logicalDevice.unmapMemory(stagingBufferMemory);
+
+	CopyBuffer(stagingBuffer, buffer, size);
+	m_logicalDevice.destroyBuffer(stagingBuffer, nullptr);
+	m_logicalDevice.freeMemory(stagingBufferMemory, nullptr);
+}
+
+vk::Buffer Graphics::CreateBuffer(vk::DeviceSize bufferSize, vk::BufferUsageFlags bufferUsageFlags, vk::MemoryPropertyFlags memoryPropertyFlags, vk::DeviceMemory& deviceMemory)
 {
 	LOG_INFO("Creating buffer...");
 
@@ -1030,6 +930,7 @@ void Graphics::CreateBuffer(vk::DeviceSize bufferSize, vk::BufferUsageFlags buff
 		.sharingMode = vk::SharingMode::eExclusive
 	};
 
+	vk::Buffer buffer;
 	if (m_logicalDevice.createBuffer(&bufferInfo, nullptr, &buffer) != vk::Result::eSuccess)
 		throw std::runtime_error("failed to create vertex buffer!");
 
@@ -1047,6 +948,7 @@ void Graphics::CreateBuffer(vk::DeviceSize bufferSize, vk::BufferUsageFlags buff
 	m_logicalDevice.bindBufferMemory(buffer, deviceMemory, 0);
 
 	LOG_SUCCESS("Buffer created successfully!");
+	return buffer;
 }
 
 void Graphics::CopyBuffer(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize bufferSize)
@@ -1101,7 +1003,7 @@ void Graphics::CreateUniformBuffers()
 {
 	LOG_INFO("Creating uniform buffers...");
 
-	vk::DeviceSize bufferSize = sizeof(UniformBufferObject);
+	vk::DeviceSize bufferSize = sizeof(UniformBuffer);
 
 	m_uniformBuffers = std::vector<vk::Buffer>(m_maxFramesInFlight);
 	m_uniformBuffersMemory = std::vector<vk::DeviceMemory>(m_maxFramesInFlight);
@@ -1109,9 +1011,8 @@ void Graphics::CreateUniformBuffers()
 
 	for (size_t i = 0; i < m_maxFramesInFlight; i++)
 	{
-		CreateBuffer(bufferSize, vk::BufferUsageFlagBits::eUniformBuffer,
-			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent,
-			m_uniformBuffers[i], m_uniformBuffersMemory[i]);
+		m_uniformBuffers[i] = CreateBuffer(bufferSize, vk::BufferUsageFlagBits::eUniformBuffer,
+			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, m_uniformBuffersMemory[i]);
 
 		if (m_logicalDevice.mapMemory(m_uniformBuffersMemory[i], 0, bufferSize, {}, &m_uniformBuffersMapped[i]) != vk::Result::eSuccess)
 			throw std::runtime_error("failed to map user memory to uniform buffer!");
@@ -1127,7 +1028,7 @@ void Graphics::UpdateUniformBuffer(uint32_t imageIndex)
 	auto currentTime = std::chrono::high_resolution_clock::now();
 	auto duration = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
 
-	UniformBufferObject ubo {};
+	UniformBuffer ubo {};
 	ubo.model = glm::rotate(glm::mat4(1.f), duration * glm::radians(-90.f), glm::vec3(0.f, 0.f, 1.f));
 	ubo.view = glm::lookAt(glm::vec3(2.f, 2.f, 2.f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 0.f, 1.f));
 	ubo.proj = glm::perspective(glm::radians(45.f),
@@ -1184,7 +1085,7 @@ void Graphics::CreateDescriptorSets()
 		vk::DescriptorBufferInfo uboInfo {
 			.buffer = m_uniformBuffers[i],
 			.offset = 0,
-			.range = sizeof(UniformBufferObject)
+			.range = sizeof(UniformBuffer)
 		};
 
 		vk::DescriptorImageInfo imageInfo {
@@ -1226,14 +1127,14 @@ void Graphics::CreateTextureImage()
 	LOG_INFO("Creating textures from images...");
 
 	int imageWidth, imageHeight, texChannels;
-	stbi_uc* pixelData = stbi_load("Engine/Textures/popcat.jpg", &imageWidth, &imageHeight, &texChannels, STBI_rgb_alpha);
+	stbi_uc* pixelData = stbi_load("Engine/Graphics/Resources/popcat.jpg", &imageWidth, &imageHeight, &texChannels, STBI_rgb_alpha);
 	if (!pixelData)
 		throw std::runtime_error("failed to load texture image!");
 
 	vk::DeviceSize imageDataSize = static_cast<vk::DeviceSize>(imageWidth * imageHeight * 4); // 4 color channels per pixel)
-	vk::Buffer stagingBuffer; vk::DeviceMemory stagingBufferMemory;
-	CreateBuffer(imageDataSize, vk::BufferUsageFlagBits::eTransferSrc,
-		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, stagingBuffer, stagingBufferMemory);
+	vk::DeviceMemory stagingBufferMemory;
+	vk::Buffer stagingBuffer = CreateBuffer(imageDataSize, vk::BufferUsageFlagBits::eTransferSrc,
+		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, stagingBufferMemory);
 
 	void* data;
 	if (m_logicalDevice.mapMemory(stagingBufferMemory, 0, imageDataSize, {}, &data) != vk::Result::eSuccess)
@@ -1362,14 +1263,12 @@ void Graphics::TransitionImageLayout(vk::Image image, vk::Format format, vk::Ima
 	vk::PipelineStageFlags srcStage{};
 	vk::PipelineStageFlags dstStage{};
 
-	if (newLayout == vk::ImageLayout::eDepthAttachmentOptimal)
+	if (newLayout == vk::ImageLayout::eDepthStencilAttachmentOptimal)
 	{
 		barrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eDepth;
 
 		if (HasStencilComponent(format))
 			barrier.subresourceRange.aspectMask |= vk::ImageAspectFlagBits::eStencil;
-		else
-			barrier.subresourceRange.aspectMask = vk::ImageAspectFlagBits::eColor;
 	}
 
 	if (oldLayout == vk::ImageLayout::eUndefined && newLayout == vk::ImageLayout::eTransferDstOptimal)
@@ -1527,8 +1426,8 @@ bool Graphics::IsDeviceSuitable(const vk::PhysicalDevice& device)
 		return false;
 	}
 
-	m_physicalDeviceFeatures2.pNext = &m_physicalDeviceVK12Features;
-	device.getFeatures2(&m_physicalDeviceFeatures2);
+	//m_physicalDeviceFeatures2.pNext = &m_physicalDeviceVK12Features;
+	//device.getFeatures2(&m_physicalDeviceFeatures2);
 
 	// get device queue families & check if a queue family contain present and graphics support
 	// find a queue family that supports both graphics and present operations for best performance
@@ -1789,11 +1688,6 @@ void Graphics::CleanupVulkan()
 
 	m_logicalDevice.destroyDescriptorSetLayout(m_descriptorSetLayout, nullptr);
 
-	m_logicalDevice.destroyBuffer(m_indexBuffer, nullptr);
-	m_logicalDevice.freeMemory(m_indexBufferMemory, nullptr);
-
-	m_logicalDevice.destroyBuffer(m_vertexBuffer, nullptr);
-	m_logicalDevice.freeMemory(m_vertexBufferMemory, nullptr);
 
 	m_logicalDevice.destroyPipeline(m_pipelineGraphics, nullptr);
 	m_logicalDevice.destroyPipelineLayout(m_pipelineLayout, nullptr);

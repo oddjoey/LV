@@ -25,9 +25,10 @@
 #include <array>		// std::array
 #include <chrono>		// std::chrono
 
-#include "Utility.h"
-#include "Logger.h"
-#include "Settings.h"
+#include "../Utility.h"
+#include "../Logger.h"
+#include "../Settings.h"
+#include "Models/Model.h"
 
 // Vulkan Graphics API: rendering
 // GLFW: window management & input handling
@@ -146,41 +147,22 @@
 	[done!] 17. Cleanup resources when done.
 */
 
-struct Vertex
-{
-	glm::vec3 position;
-	glm::vec3 color;
-	glm::vec2 texCoord;
-};
-
-struct UniformBufferObject
+struct UniformBuffer
 {
 	glm::mat4 model;
 	glm::mat4 view;
 	glm::mat4 proj;
 };
 
-const std::vector<Vertex> vertices = {
-	{{-0.5f, -0.5f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-	{{0.5f, -0.5f, 0.0f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-	{{0.5f, 0.5f, 0.0f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-	{{-0.5f, 0.5f, 0.0f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}},
-
-	{{-0.5f, -0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f}},
-	{{0.5f, -0.5f, -0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-	{{0.5f, 0.5f, -0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}},
-	{{-0.5f, 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 1.0f}}
-};
-
-const std::vector<uint16_t> indices = {
-	0, 1, 2, 2, 3, 0,
-	4, 5, 6, 6, 7, 4
-};
-
 class Graphics
 {
 public:
-	void Initialize();
+	static std::shared_ptr<Graphics> Get();
+
+	void MoveDataToDeviceBuffer(void* data, vk::DeviceSize size, vk::Buffer& buffer);
+	vk::Buffer CreateBuffer(vk::DeviceSize bufferSize, vk::BufferUsageFlags bufferUsageFlags, vk::MemoryPropertyFlags memoryPropertyFlags, vk::DeviceMemory& deviceMemory);
+	void CopyBuffer(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize bufferSize);
+
 	~Graphics();
 
 	// delete move/copy
@@ -188,7 +170,6 @@ public:
 	Graphics operator=(const Graphics& r) = delete;
 private:
 	Graphics();
-	static std::shared_ptr<Graphics> Get();
 
 	// Create GLFW window
 	void InitializeWindow();
@@ -235,18 +216,11 @@ private:
 	// Command buffers
 	void CreateCommandPools();
 	void CreateCommandBuffers();
-	void RecordCommandBuffer(const vk::CommandBuffer& commandBuffer, const vk::Framebuffer& frameBuffer);
 	vk::CommandBuffer BeginSingleTimeCommands();
 	void EndSingleTimeCommands(vk::CommandBuffer commandBuffer);
 
 	// Buffer helper functions
 	uint32_t FindMemoryTypeIndex(uint32_t memoryType, vk::MemoryPropertyFlags memoryProperties);
-	void CreateBuffer(vk::DeviceSize bufferSize, vk::BufferUsageFlags bufferUsageFlags, vk::MemoryPropertyFlags memoryPropertyFlags, vk::Buffer& buffer, vk::DeviceMemory& deviceMemory);
-	void CopyBuffer(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize bufferSize);
-
-	// Vertex/index buffers
-	void CreateVertexBuffer();
-	void CreateIndexBuffer();
 
 	// Uniform buffers
 	void CreateUniformBuffers();
@@ -279,6 +253,8 @@ private:
 	void CreateDepthResources();
 
 	friend class Lordi;
+	friend class Renderer;
+	friend class ModelManager;
 
 	// Singleton
 	static std::shared_ptr<Graphics> s_instance;
@@ -355,7 +331,7 @@ private:
 	vk::CommandPool m_commandPoolTransfer = {};
 
 	// Sync objects
-	const int m_maxFramesInFlight = 2; // 2 - double buffering, 3 - triple buffering
+	const int m_maxFramesInFlight = 2;
 	std::vector<vk::Semaphore> m_imageAvailableSemaphores = {};
 	std::vector<vk::Semaphore> m_renderFinishedSemaphores = {};
 	std::vector<vk::Fence> m_frameInFlightFences = {};
@@ -363,14 +339,6 @@ private:
 
 	// Frame buffers
 	std::vector<vk::Framebuffer> m_frameBuffers = {};
-
-	// Vertex buffer
-	vk::Buffer m_vertexBuffer = {};
-	vk::DeviceMemory m_vertexBufferMemory = {};
-
-	// Index buffer
-	vk::Buffer m_indexBuffer = {};
-	vk::DeviceMemory m_indexBufferMemory = {};
 
 	// Command buffers
 	std::vector<vk::CommandBuffer> m_commandBuffers = {};

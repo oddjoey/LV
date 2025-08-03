@@ -8,7 +8,9 @@
 #endif // _DEBUG
 
 #include "Settings.h"
-#include "Graphics.h"
+#include "Graphics/Graphics.h"
+#include "Graphics/Objects/ObjectManager.h"
+#include "Graphics/Renderer.h"
 
 class Lordi
 {

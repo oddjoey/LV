@@ -94,7 +94,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Programming\Libraries\glm;D:\Programming\Libraries\Vulkan-SDK\Include;D:\Programming\Libraries\termcolor;D:\Programming\Libraries\magic_enum-v0.9.7\include;D:\Programming\Libraries\stb_image;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\Programming\Libraries\tinyobjloader;D:\Programming\Libraries\glm;D:\Programming\Libraries\Vulkan-SDK\Include;D:\Programming\Libraries\termcolor;D:\Programming\Libraries\magic_enum-v0.9.7\include;D:\Programming\Libraries\stb_image;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
@@ -114,7 +114,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Programming\Libraries\glm;D:\Programming\Libraries\Vulkan-SDK\Include;D:\Programming\Libraries\termcolor;D:\Programming\Libraries\magic_enum-v0.9.7\include;D:\Programming\Libraries\stb_image;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\Programming\Libraries\tinyobjloader;D:\Programming\Libraries\glm;D:\Programming\Libraries\Vulkan-SDK\Include;D:\Programming\Libraries\termcolor;D:\Programming\Libraries\magic_enum-v0.9.7\include;D:\Programming\Libraries\stb_image;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
@@ -134,7 +134,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Programming\Libraries\glm;D:\Programming\Libraries\Vulkan-SDK\Include;D:\Programming\Libraries\termcolor;D:\Programming\Libraries\magic_enum-v0.9.7\include;D:\Programming\Libraries\stb_image;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\Programming\Libraries\tinyobjloader;D:\Programming\Libraries\glm;D:\Programming\Libraries\Vulkan-SDK\Include;D:\Programming\Libraries\termcolor;D:\Programming\Libraries\magic_enum-v0.9.7\include;D:\Programming\Libraries\stb_image;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
@@ -154,7 +154,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Programming\Libraries\glm;D:\Programming\Libraries\Vulkan-SDK\Include;D:\Programming\Libraries\termcolor;D:\Programming\Libraries\magic_enum-v0.9.7\include;D:\Programming\Libraries\stb_image;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>D:\Programming\Libraries\tinyobjloader;D:\Programming\Libraries\glm;D:\Programming\Libraries\Vulkan-SDK\Include;D:\Programming\Libraries\termcolor;D:\Programming\Libraries\magic_enum-v0.9.7\include;D:\Programming\Libraries\stb_image;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
@@ -169,18 +169,29 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Engine\Graphics\Graphics.cpp" />
+    <ClCompile Include="Engine\Graphics\Models\Model.cpp" />
+    <ClCompile Include="Engine\Graphics\Models\ModelManager.cpp" />
+    <ClCompile Include="Engine\Graphics\Objects\ObjectManager.cpp" />
+    <ClCompile Include="Engine\Graphics\Renderer.cpp" />
     <ClCompile Include="Engine\Lordi.cpp" />
-    <ClCompile Include="Engine\Graphics.cpp" />
     <ClCompile Include="Engine\Settings.cpp" />
     <ClCompile Include="Engine\Utility.cpp" />
     <ClCompile Include="main.cpp" />
+    <ClCompile Include="Engine\Graphics\Objects\Object.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Engine\Graphics\Graphics.h" />
+    <ClInclude Include="Engine\Graphics\Models\Model.h" />
+    <ClInclude Include="Engine\Graphics\Models\ModelManager.h" />
+    <ClInclude Include="Engine\Graphics\Renderer.h" />
+    <ClInclude Include="Engine\Graphics\Objects\ObjectManager.h" />
     <ClInclude Include="Engine\Lordi.h" />
     <ClInclude Include="Engine\Graphics.h" />
     <ClInclude Include="Engine\Logger.h" />
     <ClInclude Include="Engine\Settings.h" />
     <ClInclude Include="Engine\Utility.h" />
+    <ClInclude Include="Engine\Graphics\Objects\Object.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Engine\Shaders\compile.bat" />
