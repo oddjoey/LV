@@ -2,6 +2,7 @@
 
 #include "Graphics.h"
 #include "Objects/ObjectManager.h"
+#include "Models/TextureManager.h"
 #include "Models/ModelManager.h"
 
 class Renderer
@@ -14,8 +15,9 @@ public:
 	Renderer();
 	~Renderer();
 private:
-	std::shared_ptr<Graphics> m_graphics = nullptr;
-	std::shared_ptr<ModelManager> m_modelManger = nullptr;
-	const int	m_maxFramesInFlight = 2;
-	uint32_t	m_frameInFlightIndex = 0;
+	std::shared_ptr<Graphics>			m_graphics = nullptr;
+	std::shared_ptr<ModelManager>		m_modelManger = nullptr;
+	std::shared_ptr<TextureManager>		m_textureManager = nullptr;
+	const int							m_maxFramesInFlight = 2;
+	uint32_t							m_frameInFlightIndex = 0;
 };

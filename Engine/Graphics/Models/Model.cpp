@@ -3,16 +3,21 @@
 #define TINYOBJLOADER_IMPLEMENTATION
 #include <tiny_obj_loader.h>
 
-Model::Model(const std::string& modelName, const std::string& modelPath, const std::string& texturePath) : m_name(modelName)
+Model::Model(const std::string& modelName, const std::string& modelPath) : m_name(modelName), m_path(modelPath)
 {
+	if (modelName.empty() || modelPath.empty())
+		throw std::runtime_error("Model parameters not valid!");
+
 	tinyobj::attrib_t at;
 	std::vector<tinyobj::shape_t> shapes;
 	std::vector<tinyobj::material_t> materials;
 	std::string err;
 
-	if (!tinyobj::LoadObj(&at, &shapes, &materials, &err, modelPath.c_str()))
+	if (!tinyobj::LoadObj(&at, &shapes, &materials, &err, m_path.c_str()))
 		throw std::runtime_error(err);
 
+	glm::vec3 minBounds(FLT_MAX);
+	glm::vec3 maxBounds(-FLT_MAX);
 	for (const auto& shape : shapes)
 		for (const auto& index : shape.mesh.indices)
 		{
@@ -24,9 +29,12 @@ Model::Model(const std::string& modelName, const std::string& modelPath, const s
 				at.vertices[3 * index.vertex_index + 2]
 			};
 
+			minBounds = glm::min(minBounds, vertex.position);
+			maxBounds = glm::max(maxBounds, vertex.position);
+
 			vertex.texCoord = {
 				at.texcoords[2 * index.texcoord_index],
-				at.texcoords[2 * index.texcoord_index + 1]
+				1.f - at.texcoords[2 * index.texcoord_index + 1]
 			};
 
 			vertex.color = { 1.f, 1.f, 1.f };
@@ -34,6 +42,15 @@ Model::Model(const std::string& modelName, const std::string& modelPath, const s
 			m_vertices.push_back(vertex);
 			m_indices.push_back(static_cast<uint32_t>(m_indices.size()));
 		}
+
+	glm::vec3 center = (minBounds + maxBounds) * 0.5f;
+	glm::vec3 size = maxBounds - minBounds;
+
+	float maxExtent = std::max({size.x, size.y, size.z});
+	float scale = 2.f / maxExtent;
+
+	for (auto& vertex : m_vertices)
+		vertex.position = (vertex.position - center) * scale;
 }
 
 Model::~Model()

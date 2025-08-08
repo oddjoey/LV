@@ -23,14 +23,7 @@ Lordi::~Lordi()
 bool Lordi::InitializeSystems()
 {
 	LOG_INFO("Initializing Lordi's systems...");
-	Graphics::Get();
 
-	Model model = { "Engine/Graphics/Resources/viking_room.obj", "" };
-
-	ModelManager::Get()->AddModel(model);
-	ModelManager::Get()->InitializeModelsToMemory();
-
-	ObjectManager::Get();
 	Renderer::Get();
 
 	LOG_SUCCESS("Lordi's systems initialized successfully!");

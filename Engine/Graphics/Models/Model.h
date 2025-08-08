@@ -3,7 +3,6 @@
 #include <string>
 #include <vector>
 
-#include <stb_image.h>
 #include <glm/glm.hpp>
 
 struct Vertex
@@ -17,7 +16,7 @@ class Model
 {
 	friend class ModelManager;
 public:
-	Model(const std::string& modelName, const std::string& modelPath, const std::string& texturePath);
+	Model(const std::string& modelName, const std::string& modelPath);
 	~Model();
 	const std::vector<Vertex>& GetVertices() const;
 	const std::vector<uint32_t>& GetIndices() const;
@@ -25,9 +24,10 @@ public:
 	void SetIndex(const uint8_t& index);
 private:
 	std::string				m_name = "";
-	std::string				m_modelPath = "";
-	std::string				m_texturePath = "";
 	uint8_t					m_index = 0;
+
+	std::string				m_path = "";
+
 	std::vector<Vertex>		m_vertices = {};
 	std::vector<uint32_t>	m_indices = {};
 };

@@ -179,6 +179,8 @@
     <ClCompile Include="Engine\Utility.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Engine\Graphics\Objects\Object.cpp" />
+    <ClCompile Include="Engine\Graphics\Models\Texture.cpp" />
+    <ClCompile Include="Engine\Graphics\Models\TextureManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Engine\Graphics\Graphics.h" />
@@ -192,6 +194,8 @@
     <ClInclude Include="Engine\Settings.h" />
     <ClInclude Include="Engine\Utility.h" />
     <ClInclude Include="Engine\Graphics\Objects\Object.h" />
+    <ClInclude Include="Engine\Graphics\Models\Texture.h" />
+    <ClInclude Include="Engine\Graphics\Models\TextureManager.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Engine\Shaders\compile.bat" />

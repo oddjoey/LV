@@ -157,11 +157,20 @@ struct UniformBuffer
 class Graphics
 {
 public:
+	friend class Renderer;
 	static std::shared_ptr<Graphics> Get();
 
-	void MoveDataToDeviceBuffer(void* data, vk::DeviceSize size, vk::Buffer& buffer);
-	vk::Buffer CreateBuffer(vk::DeviceSize bufferSize, vk::BufferUsageFlags bufferUsageFlags, vk::MemoryPropertyFlags memoryPropertyFlags, vk::DeviceMemory& deviceMemory);
-	void CopyBuffer(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize bufferSize);
+	void CopyDataToBuffer(void* data, vk::DeviceSize size, vk::Buffer& buffer);
+	vk::Buffer CreateBuffer(vk::DeviceSize bufferSize, vk::BufferUsageFlags bufferUsageFlags, vk::MemoryPropertyFlags memoryPropertyFlags, vk::DeviceMemory& deviceMemory, bool cleanup = false);
+	void CopyBufferToBuffer(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize bufferSize);
+
+	vk::Image CreateImage(uint32_t imageWidth, uint32_t imageHeight, vk::Format imageFormat, vk::ImageTiling imageTiling,
+		vk::ImageUsageFlags imageUsage, vk::MemoryPropertyFlags memoryProperties, vk::DeviceMemory& deviceMemory, bool cleanup = false);
+	vk::ImageView CreateImageView(vk::Image image, vk::Format format, vk::ImageAspectFlags aspectFlags, bool cleanup = false);
+	void TransitionImageLayout(vk::Image image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout);
+	void CopyDataToImage(void* data, vk::DeviceSize size, vk::Image& image, uint32_t imageWidth, uint32_t imageHeight);
+	void CopyBufferToImage(vk::Buffer buffer, vk::Image image, uint32_t imageWidth, uint32_t imageHeight);
+	vk::Sampler CreateSampler(bool cleanup = false);
 
 	~Graphics();
 
@@ -171,6 +180,7 @@ public:
 private:
 	Graphics();
 
+	void SetupVulkan();
 	// Create GLFW window
 	void InitializeWindow();
 
@@ -227,9 +237,9 @@ private:
 	void UpdateUniformBuffer(uint32_t currentImage);
 
 	// Descriptors
-	void CreateDescriptorSetLayout();
-	void CreateDescriptorPool();
-	void CreateDescriptorSets();
+	void CreateDescriptorSetLayout(const uint32_t& numOfTextures);
+	void CreateDescriptorPool(const uint32_t& numOfTextures);
+	void CreateDescriptorSets(const uint32_t& numOfTextures, const std::vector<vk::DescriptorImageInfo>& textureDescriptors);
 
 	// Sync
 	void CreateSyncObjects();
@@ -237,17 +247,7 @@ private:
 	void DrawFrame();
 
 	// Image helper functions
-	vk::Image CreateImage(uint32_t imageWidth, uint32_t imageHeight, vk::Format imageFormat, vk::ImageTiling imageTiling,
-		vk::ImageUsageFlags imageUsage, vk::MemoryPropertyFlags memoryProperties, vk::DeviceMemory& imageMemory);
-	vk::ImageView CreateImageView(vk::Image image, vk::Format format, vk::ImageAspectFlags aspectFlags);
-	void TransitionImageLayout(vk::Image image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout);
-	void CopyBufferToImage(vk::Buffer buffer, vk::Image image, uint32_t imageWidth, uint32_t imageHeight);
 	bool HasStencilComponent(vk::Format format);
-
-	// Texture
-	void CreateTextureImage();
-	void CreateTextureImageView();
-	void CreateTextureSampler();
 
 	// Depth
 	void CreateDepthResources();
@@ -267,7 +267,10 @@ private:
 		"VK_LAYER_KHRONOS_validation"
 	};
 	std::vector<const char*> m_requiredDeviceExtensionNames = { 
-		VK_KHR_SWAPCHAIN_EXTENSION_NAME
+		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
+		//VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
+		//VK_KHR_MAINTENANCE3_EXTENSION_NAME,
+		VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME
 	};
 
 	// Window/surface
@@ -291,8 +294,8 @@ private:
 	uint32_t m_physicalDevicePresentIndex = 0;
 	uint32_t m_physicalDeviceTransferIndex = 0;
 	vk::PhysicalDeviceFeatures m_physicalDeviceFeatures = {};
-	vk::PhysicalDeviceFeatures2 m_physicalDeviceFeatures2 = {};
-	vk::PhysicalDeviceVulkan12Features m_physicalDeviceVK12Features = {};
+	//vk::PhysicalDeviceFeatures2 m_physicalDeviceFeatures2 = {};
+	//vk::PhysicalDeviceVulkan12Features m_physicalDeviceVK12Features = {};
 	vk::PhysicalDeviceProperties m_physicalDeviceProps = {};
 	vk::PhysicalDeviceMemoryProperties m_physicalDeviceMemoryProps = {};
 	std::vector<vk::ExtensionProperties> m_physicalDeviceExtensions = {};
@@ -349,19 +352,22 @@ private:
 	std::vector<void*> m_uniformBuffersMapped = {};
 
 	// Descriptor sets
-	vk::DescriptorSetLayout m_descriptorSetLayout = {};
+	vk::DescriptorSetLayout m_descriptorSetLayoutUBO = {};
+	vk::DescriptorSetLayout m_descriptorSetLayoutSampler = {};
 	vk::DescriptorPool m_descriptorPool = {};
-	std::vector<vk::DescriptorSet> m_descriptorSets = {};
-
-	// Textures
-	vk::Image m_textureImage = {};
-	vk::DeviceMemory m_textureImageMemory = {};
-	vk::ImageView m_textureImageView = {};
-	vk::Sampler m_textureSampler = {};
+	std::vector<vk::DescriptorSet> m_descriptorSetsUBO = {};
+	vk::DescriptorSet m_descriptorSetSampler = {};
 
 	// Depth
 	vk::Image m_depthImage = {};
 	vk::DeviceMemory m_depthImageMemory = {};
 	vk::ImageView m_depthImageView = {};
 	vk::Format m_depthImageFormat = {};
+
+	// Memory managment
+	std::vector<vk::Buffer>					m_manageBuffers = {};
+	std::vector<vk::Image>					m_manageImages = {};
+	std::vector<vk::ImageView>				m_manageImageViews = {};
+	std::vector<vk::Sampler>				m_manageSamplers = {};
+	std::vector<vk::DeviceMemory>			m_manageMemories = {};
 };

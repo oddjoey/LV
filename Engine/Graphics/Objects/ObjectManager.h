@@ -9,11 +9,11 @@ class ObjectManager
 {
 public:
 	static std::shared_ptr<ObjectManager> Get();
-
+	void CreateObject(const Object& obj);
 	ObjectManager();
 	~ObjectManager();
 private:
 	static std::shared_ptr<ObjectManager> s_instance;
 
-	std::unordered_map<uint8_t, std::vector<Object>> m_modelInstances;
+	std::unordered_map<uint8_t, std::vector<Object>> m_objects;
 };

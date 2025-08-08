@@ -20,12 +20,12 @@ glm::vec3 Object::GetPosition() const
 	return m_position;
 }
 
-void Object::SetModelIndex(const uint8_t& modelIndex)
+void Object::SetModelIndex(const uint32_t& modelIndex)
 {
 	m_modelIndex = modelIndex;
 }
 
-uint8_t Object::GetModelIndex() const
+uint32_t Object::GetModelIndex() const
 {
 	return m_modelIndex;
 }

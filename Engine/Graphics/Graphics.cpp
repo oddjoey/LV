@@ -15,10 +15,8 @@ std::shared_ptr<Graphics> Graphics::Get()
 	return s_instance;
 }
 
-Graphics::Graphics()
+void Graphics::SetupVulkan()
 {
-	LOG_INFO("Initializing Graphics...");
-
 	VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
 
 	InitializeWindow();
@@ -43,30 +41,13 @@ Graphics::Graphics()
 
 	CreateRenderPass();
 
-	CreateDescriptorSetLayout();
-
-	CreateGraphicsPipeline();
-
 	CreateCommandPools();
-
-	CreateDepthResources();
-
-	CreateFrameBuffers();
-
-	CreateTextureImage();
-	CreateTextureImageView();
-	CreateTextureSampler();
-
-	CreateUniformBuffers();
-
-	CreateDescriptorPool();
-	CreateDescriptorSets();
-
 	CreateCommandBuffers();
+}
 
-	CreateSyncObjects();
+Graphics::Graphics()
+{
 
-	LOG_SUCCESS("Graphics initialized successfully!");
 }
 
 Graphics::~Graphics()
@@ -75,7 +56,8 @@ Graphics::~Graphics()
 	CleanupVulkan();
 }
 
-void Graphics::CreateVulkanInstance() {
+void Graphics::CreateVulkanInstance() 
+{
 	LOG_INFO("Creating Vulkan instance...");
 
 	vk::ApplicationInfo appInfo { 
@@ -83,7 +65,7 @@ void Graphics::CreateVulkanInstance() {
 		.applicationVersion = VK_MAKE_VERSION(1, 0, 0),
 		.pEngineName = "Lordi Engine",
 		.engineVersion = VK_MAKE_VERSION(1, 0, 0),
-		.apiVersion = VK_API_VERSION_1_0
+		.apiVersion = VK_API_VERSION_1_4
 	};
 
 	vk::InstanceCreateInfo createInfo {
@@ -189,7 +171,6 @@ void Graphics::CreateLogicalDevice()
 			.queueCount = 1,
 			.pQueuePriorities = &queuePriority
 		};
-
 		deviceQueuesInfo.push_back(queueCreateInfo);
 	}
 
@@ -197,7 +178,14 @@ void Graphics::CreateLogicalDevice()
 	deviceFeatures.samplerAnisotropy = vk::True;
 	deviceFeatures.depthBounds = vk::True;
 
+	vk::PhysicalDeviceDescriptorIndexingFeatures descriptorIndexFeatures {
+		.shaderSampledImageArrayNonUniformIndexing = vk::True,
+		.descriptorBindingVariableDescriptorCount = vk::True,
+		.runtimeDescriptorArray = vk::True
+	};
+
 	vk::DeviceCreateInfo deviceCreateInfo {
+		.pNext = &descriptorIndexFeatures,
 		.flags = {},
 		.queueCreateInfoCount = static_cast<uint32_t>(deviceQueuesInfo.size()),
 		.pQueueCreateInfos = deviceQueuesInfo.data(),
@@ -205,11 +193,6 @@ void Graphics::CreateLogicalDevice()
 		.ppEnabledExtensionNames = m_requiredDeviceExtensionNames.data(),
 		.pEnabledFeatures = &deviceFeatures,
 	};
-
-//#ifdef _DEBUG
-//	deviceCreateInfo.enabledLayerCount = static_cast<uint32_t>(m_cvRequiredValidationLayerNames.size());
-//	deviceCreateInfo.ppEnabledLayerNames = m_cvRequiredValidationLayerNames.data();
-//#endif // _DEBUG
 
 	if (m_physicalDevice.createDevice(&deviceCreateInfo, nullptr, &m_logicalDevice) != vk::Result::eSuccess)
 		throw std::runtime_error("failed to create logical device!");
@@ -639,12 +622,22 @@ void Graphics::CreateGraphicsPipeline()
 		.pDynamicStates = dynamicStates.data()
 	};
 
+	std::vector<vk::DescriptorSetLayout> descriptorSetLayouts = { m_descriptorSetLayoutUBO, m_descriptorSetLayoutSampler };
+	
+	vk::PushConstantRange textureIndexConst {
+		.stageFlags = vk::ShaderStageFlagBits::eFragment,
+		.offset = 0,
+		.size = sizeof(uint32_t)
+	};
+
+	std::vector<vk::PushConstantRange> pushConstants = { textureIndexConst };
+	
 	vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
 		.flags = {},
-		.setLayoutCount = 1,
-		.pSetLayouts = &m_descriptorSetLayout,
-		.pushConstantRangeCount = 0,
-		.pPushConstantRanges = nullptr
+		.setLayoutCount = static_cast<uint32_t>(descriptorSetLayouts.size()),
+		.pSetLayouts = descriptorSetLayouts.data(),
+		.pushConstantRangeCount = static_cast<uint32_t>(pushConstants.size()),
+		.pPushConstantRanges = pushConstants.data()
 	};
 	if (m_logicalDevice.createPipelineLayout(&pipelineLayoutInfo, nullptr, &m_pipelineLayout) != vk::Result::eSuccess)
 		throw std::runtime_error("failed to create pipeline layout!");
@@ -903,7 +896,7 @@ uint32_t Graphics::FindMemoryTypeIndex(uint32_t memoryTypeBitMask, vk::MemoryPro
 	return 0;
 }
 
-void Graphics::MoveDataToDeviceBuffer(void* data, vk::DeviceSize size, vk::Buffer& buffer)
+void Graphics::CopyDataToBuffer(void* data, vk::DeviceSize size, vk::Buffer& buffer)
 {
 	vk::DeviceMemory stagingBufferMemory;
 	vk::Buffer stagingBuffer = CreateBuffer(size, vk::BufferUsageFlagBits::eTransferSrc,
@@ -915,12 +908,12 @@ void Graphics::MoveDataToDeviceBuffer(void* data, vk::DeviceSize size, vk::Buffe
 	memcpy(mappedData, data, static_cast<size_t>(size));
 	m_logicalDevice.unmapMemory(stagingBufferMemory);
 
-	CopyBuffer(stagingBuffer, buffer, size);
+	CopyBufferToBuffer(stagingBuffer, buffer, size);
 	m_logicalDevice.destroyBuffer(stagingBuffer, nullptr);
 	m_logicalDevice.freeMemory(stagingBufferMemory, nullptr);
 }
 
-vk::Buffer Graphics::CreateBuffer(vk::DeviceSize bufferSize, vk::BufferUsageFlags bufferUsageFlags, vk::MemoryPropertyFlags memoryPropertyFlags, vk::DeviceMemory& deviceMemory)
+vk::Buffer Graphics::CreateBuffer(vk::DeviceSize bufferSize, vk::BufferUsageFlags bufferUsageFlags, vk::MemoryPropertyFlags memoryPropertyFlags, vk::DeviceMemory& deviceMemory, bool cleanup)
 {
 	LOG_INFO("Creating buffer...");
 
@@ -948,10 +941,16 @@ vk::Buffer Graphics::CreateBuffer(vk::DeviceSize bufferSize, vk::BufferUsageFlag
 	m_logicalDevice.bindBufferMemory(buffer, deviceMemory, 0);
 
 	LOG_SUCCESS("Buffer created successfully!");
+	if (cleanup)
+	{
+		m_manageMemories.push_back(deviceMemory);
+		m_manageBuffers.push_back(buffer);
+	}
+
 	return buffer;
 }
 
-void Graphics::CopyBuffer(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize bufferSize)
+void Graphics::CopyBufferToBuffer(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize bufferSize)
 {
 	vk::CommandBuffer commandBuffer = BeginSingleTimeCommands();
 
@@ -966,11 +965,11 @@ void Graphics::CopyBuffer(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::Device
 	EndSingleTimeCommands(commandBuffer);
 }
 
-void Graphics::CreateDescriptorSetLayout()
+void Graphics::CreateDescriptorSetLayout(const uint32_t& numOfTextures)
 {
 	LOG_INFO("Creating descriptor set layout...");
 
-	vk::DescriptorSetLayoutBinding uboLayoutBinding {
+	vk::DescriptorSetLayoutBinding ubo {
 		.binding = 0,
 		.descriptorType = vk::DescriptorType::eUniformBuffer,
 		.descriptorCount = 1,
@@ -978,23 +977,40 @@ void Graphics::CreateDescriptorSetLayout()
 		.pImmutableSamplers = nullptr
 	};
 
-	vk::DescriptorSetLayoutBinding samplerLayoutBinding {
-		.binding = 1,
+	vk::DescriptorSetLayoutBinding combinedSampler {
+		.binding = 0,
 		.descriptorType = vk::DescriptorType::eCombinedImageSampler,
-		.descriptorCount = 1,
+		.descriptorCount = numOfTextures,
 		.stageFlags = vk::ShaderStageFlagBits::eFragment,
 		.pImmutableSamplers = nullptr
 	};
 
-	std::vector<vk::DescriptorSetLayoutBinding> layoutBindings { uboLayoutBinding, samplerLayoutBinding };
+	//std::vector<vk::DescriptorSetLayoutBinding> bindings { ubo, combinedSampler };
 
-	vk::DescriptorSetLayoutCreateInfo layoutInfo {
-		.bindingCount = static_cast<uint32_t>(layoutBindings.size()),
-		.pBindings = layoutBindings.data()
+	std::vector<vk::DescriptorBindingFlags> bindingFlags(1);
+	bindingFlags[bindingFlags.size() - 1] = vk::DescriptorBindingFlagBits::eVariableDescriptorCount;
+
+	vk::DescriptorSetLayoutBindingFlagsCreateInfo flagsCreateInfo {
+		.bindingCount = static_cast<uint32_t>(bindingFlags.size()),
+		.pBindingFlags = bindingFlags.data()
 	};
 
-	if (m_logicalDevice.createDescriptorSetLayout(&layoutInfo, nullptr, &m_descriptorSetLayout) != vk::Result::eSuccess)
-		throw std::runtime_error("failed to create descriptor set layout!");
+	vk::DescriptorSetLayoutCreateInfo uboLayoutCreateInfo {
+		.bindingCount = 1,
+		.pBindings = &ubo
+	};
+
+	vk::DescriptorSetLayoutCreateInfo samplerLayoutCreateInfo {
+		.pNext = &flagsCreateInfo,
+		.bindingCount = 1,
+		.pBindings = &combinedSampler
+	};
+
+	if (m_logicalDevice.createDescriptorSetLayout(&uboLayoutCreateInfo, nullptr, &m_descriptorSetLayoutUBO) != vk::Result::eSuccess)
+		throw std::runtime_error("Failed to create descriptor set layout for UBO!");
+
+	if (m_logicalDevice.createDescriptorSetLayout(&samplerLayoutCreateInfo, nullptr, &m_descriptorSetLayoutSampler) != vk::Result::eSuccess)
+		throw std::runtime_error("Failed to create descriptor set layout for sampler!");
 
 	LOG_SUCCESS("Successfully created descriptor set layout!");
 }
@@ -1012,7 +1028,7 @@ void Graphics::CreateUniformBuffers()
 	for (size_t i = 0; i < m_maxFramesInFlight; i++)
 	{
 		m_uniformBuffers[i] = CreateBuffer(bufferSize, vk::BufferUsageFlagBits::eUniformBuffer,
-			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, m_uniformBuffersMemory[i]);
+			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, m_uniformBuffersMemory[i], true);
 
 		if (m_logicalDevice.mapMemory(m_uniformBuffersMemory[i], 0, bufferSize, {}, &m_uniformBuffersMapped[i]) != vk::Result::eSuccess)
 			throw std::runtime_error("failed to map user memory to uniform buffer!");
@@ -1040,23 +1056,23 @@ void Graphics::UpdateUniformBuffer(uint32_t imageIndex)
 	memcpy(m_uniformBuffersMapped[imageIndex], &ubo, sizeof(ubo));
 }
 
-void Graphics::CreateDescriptorPool()
+void Graphics::CreateDescriptorPool(const uint32_t& numOfTextures)
 {
 	vk::DescriptorPoolSize uboPoolSize {
 		.type = vk::DescriptorType::eUniformBuffer,
 		.descriptorCount = static_cast<uint32_t>(m_maxFramesInFlight)
 	};
 
-	vk::DescriptorPoolSize samplerPoolSize{
+	vk::DescriptorPoolSize texturePoolSize {
 		.type = vk::DescriptorType::eCombinedImageSampler,
-		.descriptorCount = static_cast<uint32_t>(m_maxFramesInFlight)
+		.descriptorCount = numOfTextures
 	};
-
-	std::vector<vk::DescriptorPoolSize> poolSizes { uboPoolSize, samplerPoolSize };
+	
+	std::vector<vk::DescriptorPoolSize> poolSizes { uboPoolSize, texturePoolSize };
 	
 	vk::DescriptorPoolCreateInfo poolInfo {
-		.flags = {},
-		.maxSets = static_cast<uint32_t>(m_maxFramesInFlight),
+		.flags = vk::DescriptorPoolCreateFlagBits::eUpdateAfterBind,
+		.maxSets = static_cast<uint32_t>(m_maxFramesInFlight + numOfTextures),
 		.poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
 		.pPoolSizes = poolSizes.data(),
 	};
@@ -1065,19 +1081,17 @@ void Graphics::CreateDescriptorPool()
 		throw std::runtime_error("Failed to create descriptor pool!");
 }
 
-void Graphics::CreateDescriptorSets()
+void Graphics::CreateDescriptorSets(const uint32_t& numOfTextures, const std::vector<vk::DescriptorImageInfo>& textureDescriptors)
 {
-	std::vector<vk::DescriptorSetLayout> layouts(m_maxFramesInFlight, m_descriptorSetLayout);
-
-	vk::DescriptorSetAllocateInfo allocInfo {
+	std::vector<vk::DescriptorSetLayout> uboDescriptorSetLayouts(m_maxFramesInFlight, m_descriptorSetLayoutUBO);
+	vk::DescriptorSetAllocateInfo uboDescriptorSetAllocInfo {
 		.descriptorPool = m_descriptorPool,
 		.descriptorSetCount = static_cast<uint32_t>(m_maxFramesInFlight),
-		.pSetLayouts = layouts.data()
+		.pSetLayouts = uboDescriptorSetLayouts.data()
 	};
 
-	m_descriptorSets = std::vector<vk::DescriptorSet>(m_maxFramesInFlight);
-
-	if (m_logicalDevice.allocateDescriptorSets(&allocInfo, m_descriptorSets.data()) != vk::Result::eSuccess)
+	m_descriptorSetsUBO = std::vector<vk::DescriptorSet>(m_maxFramesInFlight);
+	if (m_logicalDevice.allocateDescriptorSets(&uboDescriptorSetAllocInfo, m_descriptorSetsUBO.data()) != vk::Result::eSuccess)
 		throw std::runtime_error("Failed to allocate descriptor sets!");
 
 	for (size_t i = 0; i < m_maxFramesInFlight; i++)
@@ -1088,14 +1102,8 @@ void Graphics::CreateDescriptorSets()
 			.range = sizeof(UniformBuffer)
 		};
 
-		vk::DescriptorImageInfo imageInfo {
-			.sampler = m_textureSampler,
-			.imageView = m_textureImageView,
-			.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
-		};
-
 		vk::WriteDescriptorSet uboDescWrite {
-			.dstSet = m_descriptorSets[i],
+			.dstSet = m_descriptorSetsUBO[i],
 			.dstBinding = 0,
 			.dstArrayElement = 0,
 			.descriptorCount = 1,
@@ -1105,59 +1113,43 @@ void Graphics::CreateDescriptorSets()
 			.pTexelBufferView = nullptr
 		};
 
-		vk::WriteDescriptorSet imageDescWrite {
-			.dstSet = m_descriptorSets[i],
-			.dstBinding = 1,
-			.dstArrayElement = 0,
-			.descriptorCount = 1,
-			.descriptorType = vk::DescriptorType::eCombinedImageSampler,
-			.pImageInfo = &imageInfo,
-			.pBufferInfo = nullptr,
-			.pTexelBufferView = nullptr
-		};
-
-		std::vector<vk::WriteDescriptorSet> descriptorWrites { uboDescWrite, imageDescWrite };
+		std::vector<vk::WriteDescriptorSet> descriptorWrites { uboDescWrite };
 		
 		m_logicalDevice.updateDescriptorSets(static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 	}
-}
 
-void Graphics::CreateTextureImage()
-{
-	LOG_INFO("Creating textures from images...");
+	std::vector<uint32_t> varDescCounts = { numOfTextures };
+	vk::DescriptorSetVariableDescriptorCountAllocateInfo varDescCountAllocInfo{
+		.descriptorSetCount = static_cast<uint32_t>(varDescCounts.size()),
+		.pDescriptorCounts = varDescCounts.data(),
+	};
 
-	int imageWidth, imageHeight, texChannels;
-	stbi_uc* pixelData = stbi_load("Engine/Graphics/Resources/popcat.jpg", &imageWidth, &imageHeight, &texChannels, STBI_rgb_alpha);
-	if (!pixelData)
-		throw std::runtime_error("failed to load texture image!");
+	vk::DescriptorSetAllocateInfo samplerDescriptorSetAllocInfo {
+		.pNext = &varDescCountAllocInfo,
+		.descriptorPool = m_descriptorPool,
+		.descriptorSetCount = 1,
+		.pSetLayouts = &m_descriptorSetLayoutSampler
+	};
 
-	vk::DeviceSize imageDataSize = static_cast<vk::DeviceSize>(imageWidth * imageHeight * 4); // 4 color channels per pixel)
-	vk::DeviceMemory stagingBufferMemory;
-	vk::Buffer stagingBuffer = CreateBuffer(imageDataSize, vk::BufferUsageFlagBits::eTransferSrc,
-		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, stagingBufferMemory);
+	if (m_logicalDevice.allocateDescriptorSets(&samplerDescriptorSetAllocInfo, &m_descriptorSetSampler) != vk::Result::eSuccess)
+		throw std::runtime_error("Failed to allocate descriptor sets!");
 
-	void* data;
-	if (m_logicalDevice.mapMemory(stagingBufferMemory, 0, imageDataSize, {}, &data) != vk::Result::eSuccess)
-		throw std::runtime_error("failed to map staging memory for vertex buffer!");
-	memcpy(data, pixelData, static_cast<size_t>(imageDataSize));
-	m_logicalDevice.unmapMemory(stagingBufferMemory);
-	stbi_image_free(pixelData);
-	m_textureImage = CreateImage(imageWidth, imageHeight, vk::Format::eR8G8B8A8Srgb, vk::ImageTiling::eOptimal,
-		vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled, vk::MemoryPropertyFlagBits::eDeviceLocal,
-		m_textureImageMemory);
+	vk::WriteDescriptorSet imageDescWrite {
+		.dstSet = m_descriptorSetSampler,
+		.dstBinding = 0,
+		.dstArrayElement = 0,
+		.descriptorCount = numOfTextures,
+		.descriptorType = vk::DescriptorType::eCombinedImageSampler,
+		.pImageInfo = textureDescriptors.data(),
+		.pBufferInfo = nullptr,
+		.pTexelBufferView = nullptr
+	};
 
-	TransitionImageLayout(m_textureImage, vk::Format::eR8G8B8A8Srgb, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
-	CopyBufferToImage(stagingBuffer, m_textureImage, static_cast<uint32_t>(imageWidth), static_cast<uint32_t>(imageHeight));
-	TransitionImageLayout(m_textureImage, vk::Format::eR8G8B8A8Srgb, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
-
-	m_logicalDevice.destroyBuffer(stagingBuffer, nullptr);
-	m_logicalDevice.freeMemory(stagingBufferMemory, nullptr);
-
-	LOG_SUCCESS("Successfully created textures from images!");
+	m_logicalDevice.updateDescriptorSets(1, &imageDescWrite, 0, nullptr);
 }
 
 vk::Image Graphics::CreateImage(uint32_t imageWidth, uint32_t imageHeight, vk::Format imageFormat, vk::ImageTiling imageTiling,
-	vk::ImageUsageFlags imageUsage, vk::MemoryPropertyFlags memoryProperties, vk::DeviceMemory& imageMemory)
+	vk::ImageUsageFlags imageUsage, vk::MemoryPropertyFlags memoryProperties, vk::DeviceMemory& deviceMemory, bool cleanup)
 {
 	LOG_INFO("Creating image...");
 
@@ -1165,7 +1157,7 @@ vk::Image Graphics::CreateImage(uint32_t imageWidth, uint32_t imageHeight, vk::F
 		.flags = {},
 		.imageType = vk::ImageType::e2D,
 		.format = imageFormat,
-		.extent = vk::Extent3D { static_cast<uint32_t>(imageWidth), static_cast<uint32_t>(imageHeight), 1},
+		.extent = vk::Extent3D { static_cast<uint32_t>(imageWidth), static_cast<uint32_t>(imageHeight), 1 },
 		.mipLevels = 1,
 		.arrayLayers = 1,
 		.samples = vk::SampleCountFlagBits::e1,
@@ -1189,13 +1181,17 @@ vk::Image Graphics::CreateImage(uint32_t imageWidth, uint32_t imageHeight, vk::F
 		.memoryTypeIndex = FindMemoryTypeIndex(imageMemRequirements.memoryTypeBits, memoryProperties)
 	};
 
-	if (m_logicalDevice.allocateMemory(&imageAllocInfo, nullptr, &imageMemory) != vk::Result::eSuccess)
+	if (m_logicalDevice.allocateMemory(&imageAllocInfo, nullptr, &deviceMemory) != vk::Result::eSuccess)
 		throw std::runtime_error("failed to allocate image memory for texture!");
 
-	m_logicalDevice.bindImageMemory(image, imageMemory, 0);
+	m_logicalDevice.bindImageMemory(image, deviceMemory, 0);
 
 	LOG_SUCCESS("Successfully created image!");
-
+	if (cleanup)
+	{
+		m_manageMemories.push_back(deviceMemory);
+		m_manageImages.push_back(image);
+	}
 	return image;
 }
 
@@ -1301,6 +1297,18 @@ void Graphics::TransitionImageLayout(vk::Image image, vk::Format format, vk::Ima
 	EndSingleTimeCommands(commandBuffer);
 }
 
+void Graphics::CopyDataToImage(void* data, vk::DeviceSize size, vk::Image& image, uint32_t imageWidth, uint32_t imageHeight)
+{
+	vk::DeviceMemory stagingBufferMemory;
+	vk::Buffer stagingBuffer = CreateBuffer(size, vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eTransferSrc, vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, stagingBufferMemory);
+
+	CopyDataToBuffer(data, size, stagingBuffer);
+	CopyBufferToImage(stagingBuffer, image, imageWidth, imageHeight);
+
+	m_logicalDevice.destroyBuffer(stagingBuffer, nullptr);
+	m_logicalDevice.freeMemory(stagingBufferMemory, nullptr);
+}
+
 void Graphics::CopyBufferToImage(vk::Buffer buffer, vk::Image image, uint32_t imageWidth, uint32_t imageHeight)
 {
 	vk::CommandBuffer commandBuffer = BeginSingleTimeCommands();
@@ -1324,12 +1332,7 @@ bool Graphics::HasStencilComponent(vk::Format format)
 	return format == vk::Format::eD32SfloatS8Uint || format == vk::Format::eD24UnormS8Uint;
 }
 
-void Graphics::CreateTextureImageView()
-{
-	m_textureImageView = CreateImageView(m_textureImage, vk::Format::eR8G8B8A8Srgb, vk::ImageAspectFlagBits::eColor);
-}
-
-vk::ImageView Graphics::CreateImageView(vk::Image image, vk::Format format, vk::ImageAspectFlags aspectFlags)
+vk::ImageView Graphics::CreateImageView(vk::Image image, vk::Format format, vk::ImageAspectFlags aspectFlags, bool cleanup)
 {
 	vk::ImageViewCreateInfo imageViewInfo {
 		.image = image,
@@ -1341,11 +1344,12 @@ vk::ImageView Graphics::CreateImageView(vk::Image image, vk::Format format, vk::
 	vk::ImageView imageView = nullptr;
 	if (m_logicalDevice.createImageView(&imageViewInfo, nullptr, &imageView) != vk::Result::eSuccess)
 		throw std::runtime_error("failed to create texture image view!");
-
+	if (cleanup)
+		m_manageImageViews.push_back(imageView);
 	return imageView;
 }
 
-void Graphics::CreateTextureSampler()
+vk::Sampler Graphics::CreateSampler(bool cleanup)
 {
 	vk::SamplerCreateInfo samplerInfo {
 		.flags = {},
@@ -1366,8 +1370,12 @@ void Graphics::CreateTextureSampler()
 		.unnormalizedCoordinates = vk::False,
 	};
 
-	if (m_logicalDevice.createSampler(&samplerInfo, nullptr, &m_textureSampler) != vk::Result::eSuccess)
+	vk::Sampler sampler = {};
+	if (m_logicalDevice.createSampler(&samplerInfo, nullptr, &sampler) != vk::Result::eSuccess)
 		throw std::runtime_error("failed to create texture sampler!");
+	if (cleanup)
+		m_manageSamplers.push_back(sampler);
+	return sampler;
 }
 
 void Graphics::CreateDepthResources()
@@ -1672,22 +1680,21 @@ void Graphics::CleanupVulkan()
 
 	CleanupSwapChain();
 
-	m_logicalDevice.destroySampler(m_textureSampler, nullptr);
-	m_logicalDevice.destroyImageView(m_textureImageView, nullptr);
-
-	m_logicalDevice.destroyImage(m_textureImage, nullptr);
-	m_logicalDevice.freeMemory(m_textureImageMemory, nullptr);
-
-	for (size_t i = 0; i < m_maxFramesInFlight; i++)
-	{
-		m_logicalDevice.destroyBuffer(m_uniformBuffers[i], nullptr);
-		m_logicalDevice.freeMemory(m_uniformBuffersMemory[i], nullptr);
-	}
+	for (const auto& buffer : m_manageBuffers)
+		m_logicalDevice.destroyBuffer(buffer, nullptr);
+	for (const auto& sampler : m_manageSamplers)
+		m_logicalDevice.destroySampler(sampler, nullptr);
+	for (const auto& imageView : m_manageImageViews)
+		m_logicalDevice.destroyImageView(imageView, nullptr);
+	for (const auto& image : m_manageImages)
+		m_logicalDevice.destroyImage(image, nullptr);
+	for (const auto& memory : m_manageMemories)
+		m_logicalDevice.freeMemory(memory, nullptr);
 
 	m_logicalDevice.destroyDescriptorPool(m_descriptorPool, nullptr);
 
-	m_logicalDevice.destroyDescriptorSetLayout(m_descriptorSetLayout, nullptr);
-
+	m_logicalDevice.destroyDescriptorSetLayout(m_descriptorSetLayoutUBO, nullptr);
+	m_logicalDevice.destroyDescriptorSetLayout(m_descriptorSetLayoutSampler, nullptr);
 
 	m_logicalDevice.destroyPipeline(m_pipelineGraphics, nullptr);
 	m_logicalDevice.destroyPipelineLayout(m_pipelineLayout, nullptr);

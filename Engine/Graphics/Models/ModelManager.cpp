@@ -12,55 +12,49 @@ std::shared_ptr<ModelManager> ModelManager::Get()
 
 void ModelManager::AddModel(Model model)
 {
-	model.SetIndex(static_cast<uint8_t>(m_models.size()));
-	m_models.push_back(model);
+	model.SetIndex(static_cast<uint8_t>(m_textures.size()));
+	m_textures.push_back(model);
 }
 
-void ModelManager::InitializeModelsToMemory()
+void ModelManager::CreateModels()
 {
+	LOG_INFO("Creating models...");
 	auto graphics = Graphics::Get();
 
-	vk::DeviceSize vertexSize = {};
 	std::vector<Vertex> vertexData = {};
 	std::vector<uint32_t> indexData = {};
-	for (auto& model : m_models)
+	for (auto& model : m_textures)
 	{
 		auto vertices = model.GetVertices();
 
-		m_vertexOffsets.push_back(vertexSize);
+		m_vertexOffsets.push_back(static_cast<uint32_t>(vertexData.size()));
 
-		vertexSize += vertices.size();
 		vertexData.insert(vertexData.end(), vertices.begin(), vertices.end());
 
-		for (auto& index : model.GetIndices())
-			indexData.push_back(static_cast<uint32_t>(index + vertexSize));
+		auto indices = model.GetIndices();
+
+		m_indexOffsets.push_back(static_cast<uint32_t>(indexData.size()));
+
+		indexData.insert(indexData.end(), indices.begin(), indices.end());
+
+		m_indexSizes.push_back(static_cast<uint32_t>(indexData.size()));
 	}
 
-	m_vertexBuffer = graphics->CreateBuffer(vertexSize * sizeof(Vertex), vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer,
-		vk::MemoryPropertyFlagBits::eDeviceLocal, m_vertexBufferMemory);
-	graphics->MoveDataToDeviceBuffer(vertexData.data(), vertexSize * sizeof(Vertex), m_vertexBuffer);
+	vk::DeviceMemory vertexMemory, indexMemory;
+	m_vertexBuffer = graphics->CreateBuffer(vertexData.size() * sizeof(Vertex), vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eVertexBuffer,
+		vk::MemoryPropertyFlagBits::eDeviceLocal, vertexMemory, true);
+	graphics->CopyDataToBuffer(vertexData.data(), static_cast<vk::DeviceSize>(vertexData.size() * sizeof(Vertex)), m_vertexBuffer);
 
 	m_indexBuffer = graphics->CreateBuffer(indexData.size() * sizeof(uint32_t), vk::BufferUsageFlagBits::eTransferDst | vk::BufferUsageFlagBits::eIndexBuffer,
-		vk::MemoryPropertyFlagBits::eDeviceLocal, m_indexBufferMemory);
-	graphics->MoveDataToDeviceBuffer(indexData.data(), static_cast<vk::DeviceSize>(indexData.size() * sizeof(uint32_t)), m_indexBuffer);
+		vk::MemoryPropertyFlagBits::eDeviceLocal, indexMemory, true);
+	graphics->CopyDataToBuffer(indexData.data(), static_cast<vk::DeviceSize>(indexData.size() * sizeof(uint32_t)), m_indexBuffer);
 
-	m_indicesSize = static_cast<uint32_t>(indexData.size());
-}
-
-void ModelManager::Cleanup()
-{
-	auto graphics = Graphics::Get();
-
-	graphics->m_logicalDevice.destroyBuffer(m_indexBuffer, nullptr);
-	graphics->m_logicalDevice.freeMemory(m_indexBufferMemory, nullptr);
-
-	graphics->m_logicalDevice.destroyBuffer(m_vertexBuffer, nullptr);
-	graphics->m_logicalDevice.freeMemory(m_vertexBufferMemory, nullptr);
+	LOG_SUCCESS("Sucessfully created models!");
 }
 
 uint8_t ModelManager::GetModelIndex(const std::string& modelName)
 {
-	for (const Model& model : m_models)
+	for (const Model& model : m_textures)
 		if (!model.m_name.compare(modelName))
 			return model.GetIndex();
 
@@ -75,5 +69,5 @@ ModelManager::ModelManager()
 
 ModelManager::~ModelManager()
 {
-	Cleanup();
+
 }

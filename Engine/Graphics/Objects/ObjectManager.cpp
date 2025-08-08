@@ -10,6 +10,13 @@ std::shared_ptr<ObjectManager> ObjectManager::Get()
 	return s_instance;
 }
 
+void ObjectManager::CreateObject(const Object& obj)
+{
+	auto modelIndex = obj.GetModelIndex();
+
+
+}
+
 ObjectManager::ObjectManager()
 {
 }
