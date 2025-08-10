@@ -1,6 +1,6 @@
 #include "Texture.h"
 
-const uint32_t Texture::GetIndex() const
+uint32_t Texture::GetIndex() const
 {
 	return m_index;
 }

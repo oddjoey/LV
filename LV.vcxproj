@@ -169,9 +169,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="Engine\Graphics\Objects\CameraManager.cpp" />
+    <ClCompile Include="Engine\Graphics\Objects\Camera.cpp" />
     <ClCompile Include="Engine\Graphics\Graphics.cpp" />
     <ClCompile Include="Engine\Graphics\Models\Model.cpp" />
     <ClCompile Include="Engine\Graphics\Models\ModelManager.cpp" />
+    <ClCompile Include="Engine\Graphics\Objects\Entity.cpp" />
     <ClCompile Include="Engine\Graphics\Objects\ObjectManager.cpp" />
     <ClCompile Include="Engine\Graphics\Renderer.cpp" />
     <ClCompile Include="Engine\Lordi.cpp" />
@@ -183,9 +186,12 @@
     <ClCompile Include="Engine\Graphics\Models\TextureManager.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Engine\Graphics\Objects\CameraManager.h" />
+    <ClInclude Include="Engine\Graphics\Objects\Camera.h" />
     <ClInclude Include="Engine\Graphics\Graphics.h" />
     <ClInclude Include="Engine\Graphics\Models\Model.h" />
     <ClInclude Include="Engine\Graphics\Models\ModelManager.h" />
+    <ClInclude Include="Engine\Graphics\Objects\Entity.h" />
     <ClInclude Include="Engine\Graphics\Renderer.h" />
     <ClInclude Include="Engine\Graphics\Objects\ObjectManager.h" />
     <ClInclude Include="Engine\Lordi.h" />

@@ -67,12 +67,12 @@ const std::vector<uint32_t>& Model::GetIndices() const
 	return m_indices;
 }
 
-const uint8_t Model::GetIndex() const
+const uint32_t Model::GetIndex() const
 {
 	return m_index;
 }
 
-void Model::SetIndex(const uint8_t& index)
+void Model::SetIndex(const uint32_t& index)
 {
 	m_index = index;
 }

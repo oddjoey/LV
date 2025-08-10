@@ -24,7 +24,26 @@ bool Lordi::InitializeSystems()
 {
 	LOG_INFO("Initializing Lordi's systems...");
 
-	Renderer::Get();
+	m_textureManager = TextureManager::Get();
+	auto sheepTexture = m_textureManager->CreateTexture({ "Sheep", "Engine/Graphics/Resources/sheep.png" });
+	auto bearTexture = m_textureManager->CreateTexture({ "Bear", "Engine/Graphics/Resources/BearMacaroon.png" });
+
+	m_modelManger = ModelManager::Get();
+	auto sheepModel = m_modelManger->CreateModel({ "Sheep", "Engine/Graphics/Resources/sheep.obj" });
+	auto bearModel = m_modelManger->CreateModel({ "Bear", "Engine/Graphics/Resources/BearMacaroon.obj" });
+
+	m_objectManager = ObjectManager::Get();
+	auto sheep = m_objectManager->CreateObject({ { 0.f, 0.f, 0.f }, { 90.f, 90.f, 0.f, 0.f }, { 1.f, 1.f, 1.f }, sheepTexture->GetIndex(), sheepModel->GetIndex() });
+	auto bear = m_objectManager->CreateObject({ { 0.f, -1.f, 0.f }, { 90.f, 90.f, 0.f, 0.f }, { 1.f, 1.f, 1.f }, bearTexture->GetIndex(), bearModel->GetIndex() });
+
+	m_cameraManager = CameraManager::Get();
+	auto camera = m_cameraManager->CreateCamera({ { 2.f, 2.f, 2.f }, { 0.f, 0.f, 0.f, 0.f }, { 1.f, 1.f, 1.f }, 45.f, 0.1f, 10.f });
+	camera->LookAt({ 0.f, 0.f, 0.f });
+	m_cameraManager->SetActiveCamera(camera);
+
+	m_settings = Settings::Get();
+	m_graphics = Graphics::Get();
+	m_renderer = Renderer::Get();
 
 	LOG_SUCCESS("Lordi's systems initialized successfully!");
 	 
@@ -33,20 +52,18 @@ bool Lordi::InitializeSystems()
 
 void Lordi::MainLoop()
 {
-	auto renderer = Renderer::Get();
-
-	while (!glfwWindowShouldClose(GetGraphics()->m_window))
+	while (!glfwWindowShouldClose(m_graphics->m_window))
 	{
 		glfwPollEvents();
-		renderer->RenderFrame();
+		m_renderer->RenderFrame();
 	}
 
-	vkDeviceWaitIdle(GetGraphics()->m_logicalDevice);
+	vkDeviceWaitIdle(m_graphics->m_logicalDevice);
 }
 
 std::shared_ptr<Graphics> Lordi::GetGraphics() const
 {
-	return Graphics::Get();
+	return m_graphics;
 }
 
 std::shared_ptr<Settings> Lordi::GetSettings() const

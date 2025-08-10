@@ -10,10 +10,11 @@ class TextureManager
 	friend class Renderer;
 public:
 	static std::shared_ptr<TextureManager> Get();
-	void AddTexture(pTexture tex);
-	pTexture CreateTexture(Texture textureInfo);
+	void AddTexture(const pTexture& tex);
+	pTexture CreateTexture(const Texture& textureInfo);
 	void CreateTextures();
 	uint32_t GetNumberOfTextures();
+	uint32_t GetTextureIndex(const std::string textureName);
 	TextureManager();
 	~TextureManager();
 private:

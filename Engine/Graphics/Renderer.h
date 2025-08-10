@@ -4,6 +4,7 @@
 #include "Objects/ObjectManager.h"
 #include "Models/TextureManager.h"
 #include "Models/ModelManager.h"
+#include "Objects/CameraManager.h"
 
 class Renderer
 {
@@ -18,6 +19,6 @@ private:
 	std::shared_ptr<Graphics>			m_graphics = nullptr;
 	std::shared_ptr<ModelManager>		m_modelManger = nullptr;
 	std::shared_ptr<TextureManager>		m_textureManager = nullptr;
-	const int							m_maxFramesInFlight = 2;
-	uint32_t							m_frameInFlightIndex = 0;
+	std::shared_ptr<ObjectManager>		m_objectManager = nullptr;
+	std::shared_ptr<CameraManager>		m_cameraManager = nullptr;
 };

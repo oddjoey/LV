@@ -233,13 +233,13 @@ private:
 	uint32_t FindMemoryTypeIndex(uint32_t memoryType, vk::MemoryPropertyFlags memoryProperties);
 
 	// Uniform buffers
-	void CreateUniformBuffers();
+	void CreateDynamicUniformBuffers();
 	void UpdateUniformBuffer(uint32_t currentImage);
 
 	// Descriptors
 	void CreateDescriptorSetLayout(const uint32_t& numOfTextures);
 	void CreateDescriptorPool(const uint32_t& numOfTextures);
-	void CreateDescriptorSets(const uint32_t& numOfTextures, const std::vector<vk::DescriptorImageInfo>& textureDescriptors);
+	void CreateDescriptorSets(const std::vector<vk::DescriptorImageInfo>& textureDescriptors);
 
 	// Sync
 	void CreateSyncObjects();
@@ -347,15 +347,16 @@ private:
 	std::vector<vk::CommandBuffer> m_commandBuffers = {};
 
 	// Uniform buffers
-	std::vector<vk::Buffer> m_uniformBuffers = {};
+	std::vector<vk::Buffer> m_dynamicUniformBuffers = {};
 	std::vector<vk::DeviceMemory> m_uniformBuffersMemory = {};
 	std::vector<void*> m_uniformBuffersMapped = {};
+	vk::DeviceSize m_alignedUBOSize;
 
 	// Descriptor sets
-	vk::DescriptorSetLayout m_descriptorSetLayoutUBO = {};
+	vk::DescriptorSetLayout m_descriptorSetLayoutDynamicUBO = {};
 	vk::DescriptorSetLayout m_descriptorSetLayoutSampler = {};
 	vk::DescriptorPool m_descriptorPool = {};
-	std::vector<vk::DescriptorSet> m_descriptorSetsUBO = {};
+	std::vector<vk::DescriptorSet> m_descriptorSetsDynamicUBO = {};
 	vk::DescriptorSet m_descriptorSetSampler = {};
 
 	// Depth

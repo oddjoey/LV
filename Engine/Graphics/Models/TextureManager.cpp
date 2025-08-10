@@ -10,15 +10,17 @@ std::shared_ptr<TextureManager> TextureManager::Get()
 	return s_instance;
 }
 
-void TextureManager::AddTexture(pTexture tex)
+void TextureManager::AddTexture(const pTexture& tex)
 {
 	tex->m_index = static_cast<uint8_t>(m_textures.size());
 	m_textures.push_back(tex);
 }
 
-pTexture TextureManager::CreateTexture(Texture textureInfo)
+pTexture TextureManager::CreateTexture(const Texture& textureInfo)
 {
-	return std::make_unique<Texture>(textureInfo);
+	auto texture = std::make_shared<Texture>(textureInfo);
+	AddTexture(texture);
+	return texture;
 }
 
 void TextureManager::CreateTextures()
@@ -63,6 +65,16 @@ void TextureManager::CreateTextures()
 uint32_t TextureManager::GetNumberOfTextures()
 {
 	return static_cast<uint32_t>(m_textures.size());
+}
+
+uint32_t TextureManager::GetTextureIndex(const std::string textureName)
+{
+	for (const auto& texture : m_textures)
+		if (!texture->m_name.compare(textureName))
+			return texture->GetIndex();
+
+	throw std::runtime_error("Texture not found!");
+	return 0;
 }
 
 TextureManager::TextureManager()

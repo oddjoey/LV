@@ -11,7 +11,7 @@ class Texture
 public:
 	Texture(const std::string& name, const std::string& path);
 	~Texture();
-	const uint32_t GetIndex() const;
+	uint32_t GetIndex() const;
 	void FreeTexture();
 	void SetIndex(const uint32_t& index);
 private:

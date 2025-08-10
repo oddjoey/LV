@@ -2,6 +2,7 @@
 
 #include <string>
 #include <vector>
+#include <memory>
 
 #include <glm/glm.hpp>
 
@@ -20,14 +21,16 @@ public:
 	~Model();
 	const std::vector<Vertex>& GetVertices() const;
 	const std::vector<uint32_t>& GetIndices() const;
-	const uint8_t GetIndex() const;
-	void SetIndex(const uint8_t& index);
+	const uint32_t GetIndex() const;
+	void SetIndex(const uint32_t& index);
 private:
 	std::string				m_name = "";
-	uint8_t					m_index = 0;
+	uint32_t				m_index = 0;
 
 	std::string				m_path = "";
 
 	std::vector<Vertex>		m_vertices = {};
 	std::vector<uint32_t>	m_indices = {};
 };
+
+typedef std::shared_ptr<Model> pModel;

@@ -10,10 +10,17 @@ std::shared_ptr<ModelManager> ModelManager::Get()
 	return s_instance;
 }
 
-void ModelManager::AddModel(Model model)
+void ModelManager::AddModel(const pModel& model)
 {
-	model.SetIndex(static_cast<uint8_t>(m_textures.size()));
-	m_textures.push_back(model);
+	model->SetIndex(static_cast<uint8_t>(m_models.size()));
+	m_models.push_back(model);
+}
+
+pModel ModelManager::CreateModel(const Model& modelInfo)
+{
+	auto model = std::make_shared<Model>(modelInfo);
+	AddModel(model);
+	return model;
 }
 
 void ModelManager::CreateModels()
@@ -23,21 +30,21 @@ void ModelManager::CreateModels()
 
 	std::vector<Vertex> vertexData = {};
 	std::vector<uint32_t> indexData = {};
-	for (auto& model : m_textures)
+	for (auto model : m_models)
 	{
-		auto vertices = model.GetVertices();
+		auto vertices = model->GetVertices();
 
 		m_vertexOffsets.push_back(static_cast<uint32_t>(vertexData.size()));
 
 		vertexData.insert(vertexData.end(), vertices.begin(), vertices.end());
 
-		auto indices = model.GetIndices();
+		auto indices = model->GetIndices();
 
 		m_indexOffsets.push_back(static_cast<uint32_t>(indexData.size()));
 
 		indexData.insert(indexData.end(), indices.begin(), indices.end());
 
-		m_indexSizes.push_back(static_cast<uint32_t>(indexData.size()));
+		m_indexSizes.push_back(static_cast<uint32_t>(indices.size()));
 	}
 
 	vk::DeviceMemory vertexMemory, indexMemory;
@@ -52,14 +59,19 @@ void ModelManager::CreateModels()
 	LOG_SUCCESS("Sucessfully created models!");
 }
 
-uint8_t ModelManager::GetModelIndex(const std::string& modelName)
+uint32_t ModelManager::GetModelIndex(const std::string& modelName)
 {
-	for (const Model& model : m_textures)
-		if (!model.m_name.compare(modelName))
-			return model.GetIndex();
+	for (const auto& model : m_models)
+		if (!model->m_name.compare(modelName))
+			return model->GetIndex();
 
 	throw std::runtime_error("Model not found!");
 	return 0;
+}
+
+uint32_t ModelManager::GetModelCount() const
+{
+	return static_cast<uint32_t>(m_models.size());
 }
 
 ModelManager::ModelManager()
