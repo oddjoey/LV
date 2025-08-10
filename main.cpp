@@ -14,7 +14,7 @@ int main()
 	graphicsSettings.eColorBlending = ColorBlendingOptions::NONE;
 	graphicsSettings.eMSAA = MSAAOptions::X1;
 
-	settings->SetSettings(graphicsSettings);
+	settings->SetGraphicsSettings(graphicsSettings);
 
 	lordi->Initialize();
 	

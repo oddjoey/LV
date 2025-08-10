@@ -31,7 +31,7 @@ bool Settings::ValidateSettings(const GraphicsSettings& settings)
 	return true;
 }
 
-void Settings::SetSettings(const GraphicsSettings& settings)
+void Settings::SetGraphicsSettings(const GraphicsSettings& settings)
 {
 	LOG_INFO("Setting Graphics settings...");
 

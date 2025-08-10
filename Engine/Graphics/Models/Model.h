@@ -3,15 +3,33 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <unordered_map>
 
 #include <glm/glm.hpp>
+#define GLM_ENABLE_EXPERIMENTAL
+#include <glm/gtx/hash.hpp>
 
 struct Vertex
 {
 	glm::vec3 position;
 	glm::vec3 color;
 	glm::vec2 texCoord;
+
+	bool operator==(const Vertex& rhs) const {
+		return position == rhs.position && color == rhs.color && texCoord == rhs.texCoord;
+	}
 };
+
+namespace std 
+{
+	template<> struct hash<Vertex> {
+		size_t operator()(Vertex const& vertex) const {
+			return ((hash<glm::vec3>()(vertex.position) ^
+				(hash<glm::vec3>()(vertex.color) << 1)) >> 1) ^
+				(hash<glm::vec2>()(vertex.texCoord) << 1);
+		}
+	};
+}
 
 class Model
 {

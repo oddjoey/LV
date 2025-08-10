@@ -29,13 +29,13 @@ pCamera CameraManager::CreateCamera(const Camera& cameraInfo)
 
 void CameraManager::AddCamera(const pCamera& camera)
 {
-	camera->m_index = static_cast<uint32_t>(m_cameras.size());
 	m_cameras.push_back(camera);
+	camera->m_index = static_cast<uint32_t>(m_cameras.size());
 }
 
 pCamera CameraManager::GetActiveCamera() const
 {
-	return m_cameras[m_activeCameraIndex];
+	return m_cameras[m_activeCameraIndex - 1];
 }
 
 void CameraManager::SetActiveCamera(const pCamera& camera)

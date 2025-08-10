@@ -19,8 +19,8 @@ pObject ObjectManager::CreateObject(const Object& objInfo)
 
 void ObjectManager::AddObject(const pObject& obj)
 {
-	obj->m_index = static_cast<uint32_t>(m_objects.size());
 	m_objects[obj->m_modelIndex].push_back(obj);
+	obj->m_index = static_cast<uint32_t>(m_objects.size());
 }
 
 void ObjectManager::ChangeObjectModel(const pObject& object, const uint32_t newModelIndex)

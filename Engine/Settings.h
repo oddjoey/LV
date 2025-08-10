@@ -96,7 +96,7 @@ public:
 
 	bool ValidateSettings(const GraphicsSettings& settings);
 
-	void SetSettings(const GraphicsSettings& settings);
+	void SetGraphicsSettings(const GraphicsSettings& settings);
 
 	GraphicsSettings GetGraphicsSettings() const;
 private:

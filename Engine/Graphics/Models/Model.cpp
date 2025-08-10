@@ -18,6 +18,8 @@ Model::Model(const std::string& modelName, const std::string& modelPath) : m_nam
 
 	glm::vec3 minBounds(FLT_MAX);
 	glm::vec3 maxBounds(-FLT_MAX);
+
+	std::unordered_map<Vertex, uint32_t> uniqueVertices{};
 	for (const auto& shape : shapes)
 		for (const auto& index : shape.mesh.indices)
 		{
@@ -39,8 +41,13 @@ Model::Model(const std::string& modelName, const std::string& modelPath) : m_nam
 
 			vertex.color = { 1.f, 1.f, 1.f };
 
-			m_vertices.push_back(vertex);
-			m_indices.push_back(static_cast<uint32_t>(m_indices.size()));
+			if (!uniqueVertices.contains(vertex))
+			{
+				uniqueVertices[vertex] = static_cast<uint32_t>(m_vertices.size());
+				m_vertices.push_back(vertex);
+			}
+
+			m_indices.push_back(uniqueVertices[vertex]);
 		}
 
 	glm::vec3 center = (minBounds + maxBounds) * 0.5f;

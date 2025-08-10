@@ -12,8 +12,8 @@ std::shared_ptr<TextureManager> TextureManager::Get()
 
 void TextureManager::AddTexture(const pTexture& tex)
 {
-	tex->m_index = static_cast<uint8_t>(m_textures.size());
 	m_textures.push_back(tex);
+	tex->m_index = static_cast<uint8_t>(m_textures.size());
 }
 
 pTexture TextureManager::CreateTexture(const Texture& textureInfo)
@@ -46,7 +46,7 @@ void TextureManager::CreateTextures()
 		graphics->TransitionImageLayout(m_textureImages[i], texture->m_format, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
 		graphics->CopyDataToImage(texture->m_pixels, textureSize, m_textureImages[i], texture->m_width, texture->m_height);
 		graphics->TransitionImageLayout(m_textureImages[i], texture->m_format, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
-
+		 
 		texture->FreeTexture();
 
 		m_textureImageViews[i] = graphics->CreateImageView(m_textureImages[i], texture->m_format, vk::ImageAspectFlagBits::eColor, true);

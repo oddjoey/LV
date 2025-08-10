@@ -97,6 +97,9 @@ void Renderer::RenderFrame()
 	{
 		uint32_t modelIndex = objectList.first;
 
+		if (!modelIndex)
+			continue;
+
 		for (auto& object : objectList.second)
 		{
 			glm::mat4 translation = glm::translate(glm::mat4(1.f), object->GetPosition());
@@ -106,7 +109,7 @@ void Renderer::RenderFrame()
 			rotation = glm::rotate(rotation, glm::radians(objRotation.z), glm::vec3(0.f, 0.f, 1.f));
 			ubo.model = rotation * translation;
 
-			uint32_t dynamicOffset = object->GetIndex() * static_cast<uint32_t>(m_graphics->m_alignedUBOSize);
+			uint32_t dynamicOffset = (object->GetIndex() - 1) * static_cast<uint32_t>(m_graphics->m_alignedUBOSize);
 			uint8_t* dst = reinterpret_cast<uint8_t*>(m_graphics->m_uniformBuffersMapped[m_graphics->m_frameInFlightIndex]) + dynamicOffset;
 			memcpy(dst, &ubo, sizeof(ubo));
 			commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_graphics->m_pipelineLayout, 0, static_cast<uint32_t>(descriptorSets.size()), descriptorSets.data(), 1, &dynamicOffset);
@@ -114,7 +117,7 @@ void Renderer::RenderFrame()
 			uint32_t textureIndex = object->GetTextureIndex();
 			commandBuffer.pushConstants(m_graphics->m_pipelineLayout, vk::ShaderStageFlagBits::eFragment, 0, sizeof(uint32_t), &textureIndex);
 
-			commandBuffer.drawIndexed(m_modelManger->m_indexSizes[modelIndex], 1, m_modelManger->m_indexOffsets[modelIndex], static_cast<uint32_t>(m_modelManger->m_vertexOffsets[modelIndex]), 0);
+			commandBuffer.drawIndexed(m_modelManger->m_indexSizes[modelIndex - 1], 1, m_modelManger->m_indexOffsets[modelIndex - 1], static_cast<uint32_t>(m_modelManger->m_vertexOffsets[modelIndex - 1]), 0);
 		}
 	}
 

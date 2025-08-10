@@ -10,7 +10,7 @@ class Object : public Entity
 {
 	friend class ObjectManager;
 public:
-	Object(const glm::vec3& position = {}, const glm::quat& rotation = {}, const glm::vec3& scale = {}, const uint32_t& textureIndex = 0, const uint32_t& modelIndex = 0);
+	Object(const glm::vec3& position = {}, const glm::quat& rotation = {}, const glm::vec3& scale = {}, const uint32_t& modelIndex = 0, const uint32_t& textureIndex = 0);
 	~Object();
 
 	uint32_t GetIndex() const;

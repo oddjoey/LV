@@ -12,8 +12,8 @@ std::shared_ptr<ModelManager> ModelManager::Get()
 
 void ModelManager::AddModel(const pModel& model)
 {
-	model->SetIndex(static_cast<uint8_t>(m_models.size()));
 	m_models.push_back(model);
+	model->SetIndex(static_cast<uint8_t>(m_models.size()));
 }
 
 pModel ModelManager::CreateModel(const Model& modelInfo)

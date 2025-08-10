@@ -13,6 +13,12 @@ layout(push_constant) uniform PushData {
 layout(location = 0) out vec4 outColor;
 
 void main() {
-    outColor = texture(textures[nonuniformEXT(textureIndex)], fragTexCoord);
-    //outColor = vec4(1, 1, 1, 1);
+    if (nonuniformEXT(textureIndex) == 0)
+    {
+        outColor = vec4(1, 1, 1, 1);
+    }
+    else
+    {
+        outColor = texture(textures[nonuniformEXT(textureIndex) - 1], fragTexCoord) * vec4(fragColor, 1);
+    }
 }

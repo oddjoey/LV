@@ -33,8 +33,8 @@ bool Lordi::InitializeSystems()
 	auto bearModel = m_modelManger->CreateModel({ "Bear", "Engine/Graphics/Resources/BearMacaroon.obj" });
 
 	m_objectManager = ObjectManager::Get();
-	auto sheep = m_objectManager->CreateObject({ { 0.f, 0.f, 0.f }, { 90.f, 90.f, 0.f, 0.f }, { 1.f, 1.f, 1.f }, sheepTexture->GetIndex(), sheepModel->GetIndex() });
-	auto bear = m_objectManager->CreateObject({ { 0.f, -1.f, 0.f }, { 90.f, 90.f, 0.f, 0.f }, { 1.f, 1.f, 1.f }, bearTexture->GetIndex(), bearModel->GetIndex() });
+	auto sheep = m_objectManager->CreateObject({ { 0.f, 0.f, 0.f }, { 90.f, 90.f, 0.f, 0.f }, { 1.f, 1.f, 1.f }, sheepModel->GetIndex(), sheepTexture->GetIndex() });
+	auto bear = m_objectManager->CreateObject({ { 0.f, -1.f, 0.f }, { 90.f, 90.f, 0.f, 0.f }, { 1.f, 1.f, 1.f }, bearModel->GetIndex(), bearTexture->GetIndex() });
 
 	m_cameraManager = CameraManager::Get();
 	auto camera = m_cameraManager->CreateCamera({ { 2.f, 2.f, 2.f }, { 0.f, 0.f, 0.f, 0.f }, { 1.f, 1.f, 1.f }, 45.f, 0.1f, 10.f });

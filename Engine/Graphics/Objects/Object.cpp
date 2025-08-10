@@ -1,6 +1,6 @@
 #include "Object.h"
 
-Object::Object(const glm::vec3& position, const glm::quat& rotation, const glm::vec3& scale, const uint32_t& textureIndex, const uint32_t& modelIndex)
+Object::Object(const glm::vec3& position, const glm::quat& rotation, const glm::vec3& scale, const uint32_t& modelIndex, const uint32_t& textureIndex)
 	: Entity(position, rotation, scale), m_index(0), m_textureIndex(textureIndex), m_modelIndex(modelIndex)
 {
 
