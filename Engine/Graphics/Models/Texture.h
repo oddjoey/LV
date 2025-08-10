@@ -17,17 +17,24 @@ public:
 private:
 	friend class TextureManager;
 
-	std::string				m_name = "";
-	std::string				m_path = "";
-	uint32_t				m_index = 0;
+	std::string					m_name = "";
+	std::string					m_path = "";
+	uint32_t					m_index = 0;
 
-	int						m_width = 0;
-	int						m_height = 0;
-	int						m_stride = 0;
+	int							m_width = 0;
+	int							m_height = 0;
+	int							m_stride = 0;
 
-	stbi_uc*				m_pixels = nullptr;
+	stbi_uc*					m_pixels = nullptr;
 	
-	vk::Format				m_format = vk::Format::eR8G8B8A8Srgb;
+	vk::Format					m_format = vk::Format::eR8G8B8A8Srgb;
+
+	vk::Image					m_image = {};
+	vk::ImageView				m_imageView = {};
+	vk::Sampler					m_sampler = {};
+	vk::DescriptorImageInfo		m_descriptor = {};
+
+	uint32_t					m_mipLevels = 0;
 };
 
 typedef std::shared_ptr<Texture> pTexture;

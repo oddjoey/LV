@@ -23,43 +23,41 @@ pTexture TextureManager::CreateTexture(const Texture& textureInfo)
 	return texture;
 }
 
-void TextureManager::CreateTextures()
+std::vector<vk::DescriptorImageInfo> TextureManager::CreateTextures()
 {
 	LOG_INFO("Creating textures...");
 
 	auto graphics = Graphics::Get();
-	
-	m_textureImages = std::vector<vk::Image>(m_textures.size());
-	m_textureImageViews = std::vector<vk::ImageView>(m_textures.size());
-	m_textureSamplers = std::vector<vk::Sampler>(m_textures.size());
-	m_textureDescriptors = std::vector<vk::DescriptorImageInfo>(m_textures.size());
 
-	int i = 0;
+	std::vector<vk::DescriptorImageInfo> textureDescriptors(m_textures.size());
 	for (auto& texture : m_textures)
 	{
 		auto textureSize = static_cast<vk::DeviceSize>(texture->m_width * texture->m_height * texture->m_stride);
 
 		vk::DeviceMemory imageMemory;
-		m_textureImages[i] = graphics->CreateImage(texture->m_width, texture->m_height, texture->m_format, vk::ImageTiling::eOptimal,
-			vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled, vk::MemoryPropertyFlagBits::eDeviceLocal, imageMemory, true);
+		texture->m_image = graphics->CreateImage(texture->m_width, texture->m_height, texture->m_mipLevels, vk::SampleCountFlagBits::e1,
+			texture->m_format, vk::ImageTiling::eOptimal, 
+			vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
+			vk::MemoryPropertyFlagBits::eDeviceLocal, imageMemory, true);
 
-		graphics->TransitionImageLayout(m_textureImages[i], texture->m_format, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal);
-		graphics->CopyDataToImage(texture->m_pixels, textureSize, m_textureImages[i], texture->m_width, texture->m_height);
-		graphics->TransitionImageLayout(m_textureImages[i], texture->m_format, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal);
-		 
+		graphics->TransitionImageLayout(texture->m_image, texture->m_format, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, texture->m_mipLevels);
+		graphics->CopyDataToImage(texture->m_pixels, textureSize, texture->m_image, texture->m_width, texture->m_height);
+		graphics->GenerateMipmaps(texture->m_image, texture->m_width, texture->m_height, texture->m_mipLevels);
 		texture->FreeTexture();
 
-		m_textureImageViews[i] = graphics->CreateImageView(m_textureImages[i], texture->m_format, vk::ImageAspectFlagBits::eColor, true);
+		texture->m_imageView = graphics->CreateImageView(texture->m_image, texture->m_format, vk::ImageAspectFlagBits::eColor, texture->m_mipLevels, true);
 
-		m_textureSamplers[i] = graphics->CreateSampler(true);
+		texture->m_sampler = graphics->CreateSampler(true);
 
-		m_textureDescriptors[i].imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
-		m_textureDescriptors[i].sampler = m_textureSamplers[i];
-		m_textureDescriptors[i].imageView = m_textureImageViews[i];
-		i++;
+		texture->m_descriptor.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+		texture->m_descriptor.imageView = texture->m_imageView;
+		texture->m_descriptor.sampler = texture->m_sampler;
+		
+		textureDescriptors[texture->GetIndex() - 1] = texture->m_descriptor;
 	}
 
 	LOG_SUCCESS("Sucessfully created textures!");
+	return textureDescriptors;
 }
 
 uint32_t TextureManager::GetNumberOfTextures()

@@ -23,9 +23,9 @@ private:
 	std::vector<pModel>						m_models = {};
 
 	vk::Buffer								m_vertexBuffer;
-	std::vector<vk::DeviceSize>				m_vertexOffsets = {};
+	std::vector<vk::DeviceSize>				m_verticesOffsets = {};
 
 	vk::Buffer								m_indexBuffer;
-	std::vector<uint32_t>					m_indexOffsets = {};
-	std::vector<uint32_t>					m_indexSizes = {};
+	std::vector<uint32_t>					m_indicesOffsets = {};
+	std::vector<uint32_t>					m_indicesCounts = {};
 };

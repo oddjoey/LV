@@ -11,8 +11,8 @@ int main()
 	graphicsSettings.uiWindowHeight = 600;
 
 	graphicsSettings.eVSync = VSyncOptions::NONE;
-	graphicsSettings.eColorBlending = ColorBlendingOptions::NONE;
-	graphicsSettings.eMSAA = MSAAOptions::X1;
+	graphicsSettings.eColorBlending = ColorBlendingOptions::MIX;
+	graphicsSettings.eMSAA = MSAAOptions::X8;
 
 	settings->SetGraphicsSettings(graphicsSettings);
 

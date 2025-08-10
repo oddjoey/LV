@@ -87,8 +87,8 @@ void Renderer::RenderFrame()
 	ubo.proj[1][1] *= -1;
 
 	std::vector<vk::DescriptorSet> descriptorSets { 
-		m_graphics->m_descriptorSetsDynamicUBO[m_graphics->m_frameInFlightIndex],
-		m_graphics->m_descriptorSetSampler 
+		m_graphics->m_dynamicUBODescriptorSets[m_graphics->m_frameInFlightIndex],
+		m_graphics->m_samplerDescriptorSet 
 	};
 	vk::DeviceSize descriptorSetBindingOffset = 0;
 	commandBuffer.bindVertexBuffers(0, 1, &m_modelManger->m_vertexBuffer, &descriptorSetBindingOffset);
@@ -117,7 +117,7 @@ void Renderer::RenderFrame()
 			uint32_t textureIndex = object->GetTextureIndex();
 			commandBuffer.pushConstants(m_graphics->m_pipelineLayout, vk::ShaderStageFlagBits::eFragment, 0, sizeof(uint32_t), &textureIndex);
 
-			commandBuffer.drawIndexed(m_modelManger->m_indexSizes[modelIndex - 1], 1, m_modelManger->m_indexOffsets[modelIndex - 1], static_cast<uint32_t>(m_modelManger->m_vertexOffsets[modelIndex - 1]), 0);
+			commandBuffer.drawIndexed(m_modelManger->m_indicesCounts[modelIndex - 1], 1, m_modelManger->m_indicesOffsets[modelIndex - 1], static_cast<uint32_t>(m_modelManger->m_verticesOffsets[modelIndex - 1]), 0);
 		}
 	}
 
@@ -171,16 +171,17 @@ Renderer::Renderer()
 	m_cameraManager = CameraManager::Get();
 
 	m_graphics->SetupVulkan();
-	m_textureManager->CreateTextures();
+	auto textureDescriptors = m_textureManager->CreateTextures();
 	m_modelManger->CreateModels();
 
 	m_graphics->CreateDynamicUniformBuffers();
 
 	m_graphics->CreateDescriptorPool(m_textureManager->GetNumberOfTextures());
 	m_graphics->CreateDescriptorSetLayout(m_textureManager->GetNumberOfTextures());
-	m_graphics->CreateDescriptorSets(m_textureManager->m_textureDescriptors);
+	m_graphics->CreateDescriptorSets(textureDescriptors);
 
 	m_graphics->CreateGraphicsPipeline();
+	m_graphics->CreateMSAAResources();
 	m_graphics->CreateDepthResources();
 	m_graphics->CreateFrameBuffers();
 	m_graphics->CreateSyncObjects();

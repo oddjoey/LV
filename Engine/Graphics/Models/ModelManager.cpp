@@ -34,17 +34,17 @@ void ModelManager::CreateModels()
 	{
 		auto vertices = model->GetVertices();
 
-		m_vertexOffsets.push_back(static_cast<uint32_t>(vertexData.size()));
+		m_verticesOffsets.push_back(static_cast<uint32_t>(vertexData.size()));
 
 		vertexData.insert(vertexData.end(), vertices.begin(), vertices.end());
 
 		auto indices = model->GetIndices();
 
-		m_indexOffsets.push_back(static_cast<uint32_t>(indexData.size()));
+		m_indicesOffsets.push_back(static_cast<uint32_t>(indexData.size()));
 
 		indexData.insert(indexData.end(), indices.begin(), indices.end());
 
-		m_indexSizes.push_back(static_cast<uint32_t>(indices.size()));
+		m_indicesCounts.push_back(static_cast<uint32_t>(indices.size()));
 	}
 
 	vk::DeviceMemory vertexMemory, indexMemory;

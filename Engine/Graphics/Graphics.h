@@ -161,16 +161,19 @@ public:
 	static std::shared_ptr<Graphics> Get();
 
 	void CopyDataToBuffer(void* data, vk::DeviceSize size, vk::Buffer& buffer);
-	vk::Buffer CreateBuffer(vk::DeviceSize bufferSize, vk::BufferUsageFlags bufferUsageFlags, vk::MemoryPropertyFlags memoryPropertyFlags, vk::DeviceMemory& deviceMemory, bool cleanup = false);
+	vk::Buffer CreateBuffer(vk::DeviceSize bufferSize, vk::BufferUsageFlags bufferUsageFlags, vk::MemoryPropertyFlags memoryPropertyFlags,
+		vk::DeviceMemory& deviceMemory, bool cleanup = false);
 	void CopyBufferToBuffer(vk::Buffer srcBuffer, vk::Buffer dstBuffer, vk::DeviceSize bufferSize);
 
-	vk::Image CreateImage(uint32_t imageWidth, uint32_t imageHeight, vk::Format imageFormat, vk::ImageTiling imageTiling,
-		vk::ImageUsageFlags imageUsage, vk::MemoryPropertyFlags memoryProperties, vk::DeviceMemory& deviceMemory, bool cleanup = false);
-	vk::ImageView CreateImageView(vk::Image image, vk::Format format, vk::ImageAspectFlags aspectFlags, bool cleanup = false);
-	void TransitionImageLayout(vk::Image image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout);
+	vk::Image CreateImage(uint32_t imageWidth, uint32_t imageHeight, uint32_t mipLevels, vk::SampleCountFlagBits sampleCount,
+		vk::Format imageFormat, vk::ImageTiling imageTiling, vk::ImageUsageFlags imageUsage, vk::MemoryPropertyFlags memoryProperties,
+		vk::DeviceMemory& deviceMemory, bool cleanup = false);
+	vk::ImageView CreateImageView(vk::Image image, vk::Format format, vk::ImageAspectFlags aspectFlags, uint32_t mipLevels, bool cleanup = false);
+	void TransitionImageLayout(vk::Image image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, uint32_t mipLevels);
 	void CopyDataToImage(void* data, vk::DeviceSize size, vk::Image& image, uint32_t imageWidth, uint32_t imageHeight);
 	void CopyBufferToImage(vk::Buffer buffer, vk::Image image, uint32_t imageWidth, uint32_t imageHeight);
 	vk::Sampler CreateSampler(bool cleanup = false);
+	void GenerateMipmaps(const vk::Image& image, const int32_t& width, const int32_t& height, const uint32_t& mipLevels);
 
 	~Graphics();
 
@@ -252,6 +255,9 @@ private:
 	// Depth
 	void CreateDepthResources();
 
+	// MSAA
+	void CreateMSAAResources();
+
 	friend class Lordi;
 	friend class Renderer;
 	friend class ModelManager;
@@ -260,16 +266,11 @@ private:
 	static std::shared_ptr<Graphics> s_instance;
 	
 	// Parameters
-	vk::PresentModeKHR m_userPresentMode = vk::PresentModeKHR::eFifo;
-	vk::SampleCountFlagBits m_maxMSAA = vk::SampleCountFlagBits::e1;
-	vk::SampleCountFlagBits m_userMSAA = vk::SampleCountFlagBits::e1;
 	std::vector<const char*> m_requiredValidationLayerNames = {
 		"VK_LAYER_KHRONOS_validation"
 	};
 	std::vector<const char*> m_requiredDeviceExtensionNames = { 
 		VK_KHR_SWAPCHAIN_EXTENSION_NAME,
-		//VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME,
-		//VK_KHR_MAINTENANCE3_EXTENSION_NAME,
 		VK_EXT_DESCRIPTOR_INDEXING_EXTENSION_NAME
 	};
 
@@ -298,6 +299,7 @@ private:
 	//vk::PhysicalDeviceVulkan12Features m_physicalDeviceVK12Features = {};
 	vk::PhysicalDeviceProperties m_physicalDeviceProps = {};
 	vk::PhysicalDeviceMemoryProperties m_physicalDeviceMemoryProps = {};
+	vk::FormatProperties m_physicalDeviceFormatProps = {};
 	std::vector<vk::ExtensionProperties> m_physicalDeviceExtensions = {};
 
 	// Logical device
@@ -317,6 +319,7 @@ private:
 	std::vector<vk::SurfaceFormatKHR> m_swapChainFormats = {};
 	vk::SurfaceFormatKHR m_swapChainFormat = {};
 	std::vector<vk::PresentModeKHR> m_swapChainPresentModes = {};
+	vk::PresentModeKHR m_requestedPresentMode = vk::PresentModeKHR::eFifo;
 
 	// Shaders
 	vk::ShaderModule m_shaderModuleVertex = {};
@@ -353,17 +356,24 @@ private:
 	vk::DeviceSize m_alignedUBOSize;
 
 	// Descriptor sets
-	vk::DescriptorSetLayout m_descriptorSetLayoutDynamicUBO = {};
-	vk::DescriptorSetLayout m_descriptorSetLayoutSampler = {};
 	vk::DescriptorPool m_descriptorPool = {};
-	std::vector<vk::DescriptorSet> m_descriptorSetsDynamicUBO = {};
-	vk::DescriptorSet m_descriptorSetSampler = {};
+	vk::DescriptorSetLayout m_dynamicUBODescriptorSetLayout = {};
+	vk::DescriptorSetLayout m_samplerDescriptorSetLayout = {};
+	std::vector<vk::DescriptorSet> m_dynamicUBODescriptorSets = {};
+	vk::DescriptorSet m_samplerDescriptorSet = {};
 
 	// Depth
 	vk::Image m_depthImage = {};
 	vk::DeviceMemory m_depthImageMemory = {};
 	vk::ImageView m_depthImageView = {};
 	vk::Format m_depthImageFormat = {};
+
+	// Multisampling
+	vk::SampleCountFlagBits m_MSAAMax = vk::SampleCountFlagBits::e1;
+	vk::SampleCountFlagBits m_MSAALevel = vk::SampleCountFlagBits::e1;
+	vk::Image m_MSAAImage = {};
+	vk::DeviceMemory m_MSAAImageMemory = {};
+	vk::ImageView m_MSAAImageView = {};
 
 	// Memory managment
 	std::vector<vk::Buffer>					m_manageBuffers = {};

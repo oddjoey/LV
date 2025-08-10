@@ -224,19 +224,19 @@ void Graphics::CreateSwapChain()
 	switch (graphicsSettings.eVSync)
 	{
 		case VSyncOptions::NONE:
-			m_userPresentMode = vk::PresentModeKHR::eImmediate; // No VSync
+			m_requestedPresentMode = vk::PresentModeKHR::eImmediate; // No VSync
 			LOG_DEBUG("VSyncOptions::NONE / VK_PRESENT_MODE_IMMEDIATE_KHR");
 			break;
 		case VSyncOptions::ENABLED:
-			m_userPresentMode = vk::PresentModeKHR::eFifo; // VSync
+			m_requestedPresentMode = vk::PresentModeKHR::eFifo; // VSync
 			LOG_DEBUG("VSyncOptions::ENABLED / VK_PRESENT_MODE_FIFO_KHR");
 			break;
 		case VSyncOptions::RELAXED:
-			m_userPresentMode = vk::PresentModeKHR::eFifoRelaxed; // Relaxed VSync
+			m_requestedPresentMode = vk::PresentModeKHR::eFifoRelaxed; // Relaxed VSync
 			LOG_DEBUG("VSyncOptions::RELAXED / VK_PRESENT_MODE_FIFO_RELAXED_KHR");
 			break;
 		case VSyncOptions::MAILBOX:
-			m_userPresentMode = vk::PresentModeKHR::eMailbox; // Mailbox VSync
+			m_requestedPresentMode = vk::PresentModeKHR::eMailbox; // Mailbox VSync
 			LOG_DEBUG("VSyncOptions::MAILBOX / VK_PRESENT_MODE_MAILBOX_KHR");
 			break;
 	}
@@ -244,7 +244,7 @@ void Graphics::CreateSwapChain()
 	vk::PresentModeKHR swapChainPresentMode = vk::PresentModeKHR::eFifo;
 	bool presentFound = false;
 	for (const auto& presentMode : m_swapChainPresentModes)
-		if (presentMode == m_userPresentMode)
+		if (presentMode == m_requestedPresentMode)
 		{
 			presentFound = true;
 			swapChainPresentMode = presentMode;
@@ -336,7 +336,7 @@ void Graphics::CreateImageViews()
 
 	m_swapChainImageViews = std::vector<vk::ImageView>(m_swapChainImages.size());
 	for (auto i = 0; i < m_swapChainImages.size(); i++)
-		m_swapChainImageViews[i] = CreateImageView(m_swapChainImages[i], m_swapChainFormat.format, vk::ImageAspectFlagBits::eColor);
+		m_swapChainImageViews[i] = CreateImageView(m_swapChainImages[i], m_swapChainFormat.format, vk::ImageAspectFlagBits::eColor, 1);
 
 	LOG_SUCCESS("Image views for swapchain images created successfully!");
 }
@@ -345,39 +345,6 @@ void Graphics::CreateRenderPass()
 {
 	LOG_INFO("Creating render pass...");
 
-	auto settings = Settings::Get()->GetGraphicsSettings();
-	switch (settings.eMSAA)
-	{
-	case MSAAOptions::X1:
-		m_userMSAA = vk::SampleCountFlagBits::e1; // no multisampling
-		LOG_DEBUG("MSAAOptions::X1 / VK_SAMPLE_COUNT_1_BIT");
-		break;
-	case MSAAOptions::X2:
-		m_userMSAA = vk::SampleCountFlagBits::e2; // 2x multisampling
-		LOG_DEBUG("MSAAOptions::X2 / VK_SAMPLE_COUNT_2_BIT");
-		break;
-	case MSAAOptions::X4:
-		m_userMSAA = vk::SampleCountFlagBits::e4; // 4x multisampling
-		LOG_DEBUG("MSAAOptions::X4 / VK_SAMPLE_COUNT_4_BIT");
-		break;
-	case MSAAOptions::X8:
-		m_userMSAA = vk::SampleCountFlagBits::e8; // 8x multisampling
-		LOG_DEBUG("MSAAOptions::X8 / VK_SAMPLE_COUNT_8_BIT");
-		break;
-	case MSAAOptions::X16:
-		m_userMSAA = vk::SampleCountFlagBits::e16; // 16x multisampling
-		LOG_DEBUG("MSAAOptions::X16 / VK_SAMPLE_COUNT_16_BIT");
-		break;
-	case MSAAOptions::X32:
-		m_userMSAA = vk::SampleCountFlagBits::e32; // 32x multisampling
-		LOG_DEBUG("MSAAOptions::X32 / VK_SAMPLE_COUNT_32_BIT");
-		break;
-	case MSAAOptions::X64:
-		m_userMSAA = vk::SampleCountFlagBits::e64; // 64x multisampling
-		LOG_DEBUG("MSAAOptions::X64 / VK_SAMPLE_COUNT_64_BIT");
-		break;
-	}
-
 	vk::AttachmentReference colorAttachmentRef {
 		.attachment = 0,
 		.layout = vk::ImageLayout::eColorAttachmentOptimal
@@ -385,13 +352,13 @@ void Graphics::CreateRenderPass()
 	vk::AttachmentDescription colorAttachment {
 		.flags = {},
 		.format = m_swapChainInfo.imageFormat,
-		.samples = m_userMSAA,
+		.samples = m_MSAALevel,
 		.loadOp = vk::AttachmentLoadOp::eClear,
 		.storeOp = vk::AttachmentStoreOp::eStore,
 		.stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
 		.stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
 		.initialLayout = vk::ImageLayout::eUndefined,
-		.finalLayout = vk::ImageLayout::ePresentSrcKHR
+		.finalLayout = vk::ImageLayout::eColorAttachmentOptimal
 	};
 
 	vk::AttachmentReference depthAttachmentRef {
@@ -401,7 +368,7 @@ void Graphics::CreateRenderPass()
 	vk::AttachmentDescription depthAttachment {
 		.flags = {},
 		.format = m_depthImageFormat,
-		.samples = m_userMSAA,
+		.samples = m_MSAALevel,
 		.loadOp = vk::AttachmentLoadOp::eClear,
 		.storeOp = vk::AttachmentStoreOp::eDontCare,
 		.stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
@@ -410,7 +377,23 @@ void Graphics::CreateRenderPass()
 		.finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal
 	};
 
-	std::vector<vk::AttachmentDescription> attachments = { colorAttachment, depthAttachment };
+	vk::AttachmentReference colorAttachmentResolveRef {
+		.attachment = 2,
+		.layout = vk::ImageLayout::eColorAttachmentOptimal
+	};
+	vk::AttachmentDescription colorAttachmentResolve{
+		.flags = {},
+		.format = m_swapChainInfo.imageFormat,
+		.samples = vk::SampleCountFlagBits::e1,
+		.loadOp = vk::AttachmentLoadOp::eDontCare,
+		.storeOp = vk::AttachmentStoreOp::eStore,
+		.stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
+		.stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
+		.initialLayout = vk::ImageLayout::eUndefined,
+		.finalLayout = vk::ImageLayout::ePresentSrcKHR
+	};
+
+	std::vector<vk::AttachmentDescription> attachments = { colorAttachment, depthAttachment, colorAttachmentResolve };
 
 	vk::SubpassDescription subpass { 
 		.flags = {},
@@ -419,18 +402,18 @@ void Graphics::CreateRenderPass()
 		.pInputAttachments = nullptr,
 		.colorAttachmentCount = 1,
 		.pColorAttachments = &colorAttachmentRef,
-		.pResolveAttachments = nullptr,
+		.pResolveAttachments = &colorAttachmentResolveRef,
 		.pDepthStencilAttachment = &depthAttachmentRef,
 		.preserveAttachmentCount = 0,
 		.pPreserveAttachments = nullptr,
 	};
 
-	vk::SubpassDependency subpassDependency {
+	vk::SubpassDependency dependency {
 		.srcSubpass = VK_SUBPASS_EXTERNAL,
 		.dstSubpass = 0,
 		.srcStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput | vk::PipelineStageFlagBits::eEarlyFragmentTests,
 		.dstStageMask = vk::PipelineStageFlagBits::eColorAttachmentOutput | vk::PipelineStageFlagBits::eEarlyFragmentTests,
-		.srcAccessMask = vk::AccessFlagBits::eNone,
+		.srcAccessMask = vk::AccessFlagBits::eColorAttachmentWrite | vk::AccessFlagBits::eDepthStencilAttachmentWrite,
 		.dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite | vk::AccessFlagBits::eDepthStencilAttachmentWrite,
 	};
 
@@ -441,7 +424,7 @@ void Graphics::CreateRenderPass()
 		.subpassCount = 1,
 		.pSubpasses = &subpass,
 		.dependencyCount = 1,
-		.pDependencies = &subpassDependency
+		.pDependencies = &dependency
 	};
 
 	if (m_logicalDevice.createRenderPass(&renderPassInfo, nullptr, &m_renderPass) != vk::Result::eSuccess)
@@ -573,7 +556,7 @@ void Graphics::CreateGraphicsPipeline()
 	// MSAA
 	vk::PipelineMultisampleStateCreateInfo multisamplingInfo {
 		.flags = {},
-		.rasterizationSamples = m_userMSAA,
+		.rasterizationSamples = m_MSAALevel,
 		.sampleShadingEnable = VK_FALSE,
 		.minSampleShading = 1.0f,
 		.pSampleMask = nullptr,
@@ -622,7 +605,7 @@ void Graphics::CreateGraphicsPipeline()
 		.pDynamicStates = dynamicStates.data()
 	};
 
-	std::vector<vk::DescriptorSetLayout> descriptorSetLayouts = { m_descriptorSetLayoutDynamicUBO, m_descriptorSetLayoutSampler };
+	std::vector<vk::DescriptorSetLayout> descriptorSetLayouts = { m_dynamicUBODescriptorSetLayout, m_samplerDescriptorSetLayout };
 	
 	vk::PushConstantRange textureIndexConst {
 		.stageFlags = vk::ShaderStageFlagBits::eFragment,
@@ -679,7 +662,7 @@ void Graphics::CreateFrameBuffers()
 
 	for (auto i = 0; i < m_swapChainImageViews.size(); i++)
 	{
-		std::vector<vk::ImageView> attachments { m_swapChainImageViews[i], m_depthImageView };
+		std::vector<vk::ImageView> attachments { m_MSAAImageView, m_depthImageView, m_swapChainImageViews[i] };
 
 		vk::FramebufferCreateInfo framebufferInfo {
 			.flags = {},
@@ -854,6 +837,7 @@ void Graphics::RecreateSwapChain()
 
 	CreateSwapChain();
 	CreateImageViews();
+	CreateMSAAResources();
 	CreateDepthResources();
 	CreateFrameBuffers();
 
@@ -863,6 +847,11 @@ void Graphics::RecreateSwapChain()
 void Graphics::CleanupSwapChain()
 {
 	LOG_INFO("Cleaning up swapchain...");
+
+	m_logicalDevice.destroyImageView(m_MSAAImageView, nullptr);
+	m_logicalDevice.destroyImage(m_MSAAImage, nullptr);
+	m_logicalDevice.freeMemory(m_MSAAImageMemory, nullptr);
+
 
 	m_logicalDevice.destroyImageView(m_depthImageView, nullptr);
 	m_logicalDevice.destroyImage(m_depthImage, nullptr);
@@ -1004,10 +993,10 @@ void Graphics::CreateDescriptorSetLayout(const uint32_t& numOfTextures)
 		.pBindings = &combinedSampler
 	};
 
-	if (m_logicalDevice.createDescriptorSetLayout(&dynamicUBOLayoutCreateInfo, nullptr, &m_descriptorSetLayoutDynamicUBO) != vk::Result::eSuccess)
+	if (m_logicalDevice.createDescriptorSetLayout(&dynamicUBOLayoutCreateInfo, nullptr, &m_dynamicUBODescriptorSetLayout) != vk::Result::eSuccess)
 		throw std::runtime_error("Failed to create descriptor set layout for UBO!");
 
-	if (m_logicalDevice.createDescriptorSetLayout(&samplerLayoutCreateInfo, nullptr, &m_descriptorSetLayoutSampler) != vk::Result::eSuccess)
+	if (m_logicalDevice.createDescriptorSetLayout(&samplerLayoutCreateInfo, nullptr, &m_samplerDescriptorSetLayout) != vk::Result::eSuccess)
 		throw std::runtime_error("Failed to create descriptor set layout for sampler!");
 
 	LOG_SUCCESS("Successfully created descriptor set layout!");
@@ -1085,15 +1074,15 @@ void Graphics::CreateDescriptorPool(const uint32_t& numOfTextures)
 
 void Graphics::CreateDescriptorSets(const std::vector<vk::DescriptorImageInfo>& textureDescriptors)
 {
-	std::vector<vk::DescriptorSetLayout> dynamicUBODescriptorSetLayouts(m_maxFramesInFlight, m_descriptorSetLayoutDynamicUBO);
+	std::vector<vk::DescriptorSetLayout> dynamicUBODescriptorSetLayouts(m_maxFramesInFlight, m_dynamicUBODescriptorSetLayout);
 	vk::DescriptorSetAllocateInfo uboDescriptorSetAllocInfo {
 		.descriptorPool = m_descriptorPool,
 		.descriptorSetCount = static_cast<uint32_t>(m_maxFramesInFlight),
 		.pSetLayouts = dynamicUBODescriptorSetLayouts.data()
 	};
 
-	m_descriptorSetsDynamicUBO = std::vector<vk::DescriptorSet>(m_maxFramesInFlight);
-	if (m_logicalDevice.allocateDescriptorSets(&uboDescriptorSetAllocInfo, m_descriptorSetsDynamicUBO.data()) != vk::Result::eSuccess)
+	m_dynamicUBODescriptorSets = std::vector<vk::DescriptorSet>(m_maxFramesInFlight);
+	if (m_logicalDevice.allocateDescriptorSets(&uboDescriptorSetAllocInfo, m_dynamicUBODescriptorSets.data()) != vk::Result::eSuccess)
 		throw std::runtime_error("Failed to allocate descriptor sets!");
 
 	for (size_t i = 0; i < m_maxFramesInFlight; i++)
@@ -1105,7 +1094,7 @@ void Graphics::CreateDescriptorSets(const std::vector<vk::DescriptorImageInfo>& 
 		};
 
 		vk::WriteDescriptorSet dynamicUBODescWrite {
-			.dstSet = m_descriptorSetsDynamicUBO[i],
+			.dstSet = m_dynamicUBODescriptorSets[i],
 			.dstBinding = 0,
 			.dstArrayElement = 0,
 			.descriptorCount = 1,
@@ -1130,14 +1119,14 @@ void Graphics::CreateDescriptorSets(const std::vector<vk::DescriptorImageInfo>& 
 		.pNext = &varDescCountAllocInfo,
 		.descriptorPool = m_descriptorPool,
 		.descriptorSetCount = 1,
-		.pSetLayouts = &m_descriptorSetLayoutSampler
+		.pSetLayouts = &m_samplerDescriptorSetLayout
 	};
 
-	if (m_logicalDevice.allocateDescriptorSets(&samplerDescriptorSetAllocInfo, &m_descriptorSetSampler) != vk::Result::eSuccess)
+	if (m_logicalDevice.allocateDescriptorSets(&samplerDescriptorSetAllocInfo, &m_samplerDescriptorSet) != vk::Result::eSuccess)
 		throw std::runtime_error("Failed to allocate descriptor sets!");
 
 	vk::WriteDescriptorSet imageDescWrite {
-		.dstSet = m_descriptorSetSampler,
+		.dstSet = m_samplerDescriptorSet,
 		.dstBinding = 0,
 		.dstArrayElement = 0,
 		.descriptorCount = varDescCounts[0],
@@ -1150,8 +1139,9 @@ void Graphics::CreateDescriptorSets(const std::vector<vk::DescriptorImageInfo>& 
 	m_logicalDevice.updateDescriptorSets(1, &imageDescWrite, 0, nullptr);
 }
 
-vk::Image Graphics::CreateImage(uint32_t imageWidth, uint32_t imageHeight, vk::Format imageFormat, vk::ImageTiling imageTiling,
-	vk::ImageUsageFlags imageUsage, vk::MemoryPropertyFlags memoryProperties, vk::DeviceMemory& deviceMemory, bool cleanup)
+vk::Image Graphics::CreateImage(uint32_t imageWidth, uint32_t imageHeight, uint32_t mipLevels, vk::SampleCountFlagBits sampleCount,
+	vk::Format imageFormat, vk::ImageTiling imageTiling, vk::ImageUsageFlags imageUsage, vk::MemoryPropertyFlags memoryProperties, 
+	vk::DeviceMemory& deviceMemory, bool cleanup)
 {
 	LOG_INFO("Creating image...");
 
@@ -1160,9 +1150,9 @@ vk::Image Graphics::CreateImage(uint32_t imageWidth, uint32_t imageHeight, vk::F
 		.imageType = vk::ImageType::e2D,
 		.format = imageFormat,
 		.extent = vk::Extent3D { static_cast<uint32_t>(imageWidth), static_cast<uint32_t>(imageHeight), 1 },
-		.mipLevels = 1,
+		.mipLevels = mipLevels,
 		.arrayLayers = 1,
-		.samples = vk::SampleCountFlagBits::e1,
+		.samples = sampleCount,
 		.tiling = imageTiling,
 		.usage = imageUsage,
 		.sharingMode = vk::SharingMode::eExclusive,
@@ -1243,7 +1233,7 @@ void Graphics::EndSingleTimeCommands(vk::CommandBuffer commandBuffer)
 	LOG_SUCCESS("Successfully freed and ended single time command buffer!");
 }
 
-void Graphics::TransitionImageLayout(vk::Image image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout)
+void Graphics::TransitionImageLayout(vk::Image image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, uint32_t mipLevels)
 {
 	vk::CommandBuffer commandBuffer = BeginSingleTimeCommands();
 
@@ -1255,7 +1245,7 @@ void Graphics::TransitionImageLayout(vk::Image image, vk::Format format, vk::Ima
 		.srcQueueFamilyIndex = vk::QueueFamilyIgnored,
 		.dstQueueFamilyIndex = vk::QueueFamilyIgnored,
 		.image = image,
-		.subresourceRange = vk::ImageSubresourceRange{ vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 }
+		.subresourceRange = vk::ImageSubresourceRange{ vk::ImageAspectFlagBits::eColor, 0, mipLevels, 0, 1 }
 	};
 
 	vk::PipelineStageFlags srcStage{};
@@ -1269,21 +1259,24 @@ void Graphics::TransitionImageLayout(vk::Image image, vk::Format format, vk::Ima
 			barrier.subresourceRange.aspectMask |= vk::ImageAspectFlagBits::eStencil;
 	}
 
-	if (oldLayout == vk::ImageLayout::eUndefined && newLayout == vk::ImageLayout::eTransferDstOptimal)
+	if (oldLayout == vk::ImageLayout::eUndefined &&
+		newLayout == vk::ImageLayout::eTransferDstOptimal)
 	{
 		barrier.srcAccessMask = vk::AccessFlagBits::eNone;
 		barrier.dstAccessMask = vk::AccessFlagBits::eTransferWrite;
 		srcStage = vk::PipelineStageFlagBits::eTopOfPipe;
 		dstStage = vk::PipelineStageFlagBits::eTransfer;
 	}
-	else if (oldLayout == vk::ImageLayout::eTransferDstOptimal && newLayout == vk::ImageLayout::eShaderReadOnlyOptimal)
+	else if (oldLayout == vk::ImageLayout::eTransferDstOptimal &&
+		newLayout == vk::ImageLayout::eShaderReadOnlyOptimal)
 	{
 		barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
 		barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
 		srcStage = vk::PipelineStageFlagBits::eTransfer;
 		dstStage = vk::PipelineStageFlagBits::eFragmentShader;
 	}
-	else if (oldLayout == vk::ImageLayout::eUndefined && newLayout == vk::ImageLayout::eDepthStencilAttachmentOptimal)
+	else if (oldLayout == vk::ImageLayout::eUndefined &&
+		newLayout == vk::ImageLayout::eDepthStencilAttachmentOptimal)
 	{
 		barrier.srcAccessMask = vk::AccessFlagBits::eNone;
 		barrier.dstAccessMask = vk::AccessFlagBits::eDepthStencilAttachmentRead | vk::AccessFlagBits::eDepthStencilAttachmentWrite;
@@ -1334,13 +1327,13 @@ bool Graphics::HasStencilComponent(vk::Format format)
 	return format == vk::Format::eD32SfloatS8Uint || format == vk::Format::eD24UnormS8Uint;
 }
 
-vk::ImageView Graphics::CreateImageView(vk::Image image, vk::Format format, vk::ImageAspectFlags aspectFlags, bool cleanup)
+vk::ImageView Graphics::CreateImageView(vk::Image image, vk::Format format, vk::ImageAspectFlags aspectFlags, uint32_t mipLevels, bool cleanup)
 {
 	vk::ImageViewCreateInfo imageViewInfo {
 		.image = image,
 		.viewType = vk::ImageViewType::e2D,
 		.format = format,
-		.subresourceRange = vk::ImageSubresourceRange { aspectFlags, 0, 1, 0, 1 }
+		.subresourceRange = vk::ImageSubresourceRange { aspectFlags, 0, mipLevels, 0, 1 }
 	};
 
 	vk::ImageView imageView = nullptr;
@@ -1367,7 +1360,7 @@ vk::Sampler Graphics::CreateSampler(bool cleanup)
 		.compareEnable = vk::False,
 		.compareOp = vk::CompareOp::eAlways,
 		.minLod = 0.f,
-		.maxLod = 0.f,
+		.maxLod = vk::LodClampNone,
 		.borderColor = vk::BorderColor::eIntOpaqueBlack,
 		.unnormalizedCoordinates = vk::False,
 	};
@@ -1380,15 +1373,85 @@ vk::Sampler Graphics::CreateSampler(bool cleanup)
 	return sampler;
 }
 
+void Graphics::GenerateMipmaps(const vk::Image& image, const int32_t& width, const int32_t& height, const uint32_t& mipLevels)
+{
+	auto commandBuffer = BeginSingleTimeCommands();
+
+	vk::ImageMemoryBarrier barrier {
+		.srcQueueFamilyIndex = vk::QueueFamilyIgnored,
+		.dstQueueFamilyIndex = vk::QueueFamilyIgnored,
+		.image = image,
+		.subresourceRange = vk::ImageSubresourceRange { vk::ImageAspectFlagBits::eColor, 0, 1, 0, 1 }
+	};
+
+	int32_t mipWidth = width, mipHeight = height;
+	for (uint32_t i = 1; i < mipLevels; i++)
+	{
+		barrier.subresourceRange.baseMipLevel = i - 1;
+		barrier.oldLayout = vk::ImageLayout::eTransferDstOptimal;
+		barrier.newLayout = vk::ImageLayout::eTransferSrcOptimal;
+		barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+		barrier.dstAccessMask = vk::AccessFlagBits::eTransferRead;
+
+		commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eTransfer, {}, 0, nullptr,
+			0, nullptr, 1, &barrier);
+
+		vk::ImageBlit blit {
+			.srcSubresource = vk::ImageSubresourceLayers { vk::ImageAspectFlagBits::eColor, i - 1, 0, 1 },
+			.srcOffsets = std::array<vk::Offset3D, 2> { vk::Offset3D {0, 0, 0}, vk::Offset3D {mipWidth, mipHeight, 1 } },
+			.dstSubresource = vk::ImageSubresourceLayers { vk::ImageAspectFlagBits::eColor, i, 0, 1 },
+			.dstOffsets = std::array<vk::Offset3D, 2> { vk::Offset3D {0, 0, 0},
+				vk::Offset3D {mipWidth > 1 ? mipWidth / 2 : 1, mipHeight > 1 ? mipHeight / 2 : 1, 1}}
+		};
+
+		commandBuffer.blitImage(image, vk::ImageLayout::eTransferSrcOptimal, image, vk::ImageLayout::eTransferDstOptimal, 1,
+			&blit, vk::Filter::eLinear);
+
+		barrier.oldLayout = vk::ImageLayout::eTransferSrcOptimal;
+		barrier.newLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+		barrier.srcAccessMask = vk::AccessFlagBits::eTransferRead;
+		barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
+
+		commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eFragmentShader, {}, 0, nullptr,
+			0, nullptr, 1, &barrier);
+
+		if (mipWidth > 1)
+			mipWidth /= 2;
+		if (mipHeight > 1)
+			mipHeight /= 2;
+	}
+
+	barrier.subresourceRange.baseMipLevel = mipLevels - 1;
+	barrier.oldLayout = vk::ImageLayout::eTransferDstOptimal;
+	barrier.newLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
+	barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+	barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
+
+	commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eFragmentShader, {}, 0, nullptr,
+		0, nullptr, 1, &barrier);
+
+	EndSingleTimeCommands(commandBuffer);
+}
+
 void Graphics::CreateDepthResources()
 {
-	m_depthImage = CreateImage(m_swapChainInfo.imageExtent.width, m_swapChainInfo.imageExtent.height,
+	m_depthImage = CreateImage(m_swapChainInfo.imageExtent.width, m_swapChainInfo.imageExtent.height, 1, m_MSAALevel,
 		m_depthImageFormat, vk::ImageTiling::eOptimal, vk::ImageUsageFlagBits::eDepthStencilAttachment,
 		vk::MemoryPropertyFlagBits::eDeviceLocal, m_depthImageMemory);
 
-	m_depthImageView = CreateImageView(m_depthImage, m_depthImageFormat, vk::ImageAspectFlagBits::eDepth);
+	m_depthImageView = CreateImageView(m_depthImage, m_depthImageFormat, vk::ImageAspectFlagBits::eDepth, 1);
 
-	TransitionImageLayout(m_depthImage, m_depthImageFormat, vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilAttachmentOptimal);
+	TransitionImageLayout(m_depthImage, m_depthImageFormat, vk::ImageLayout::eUndefined, vk::ImageLayout::eDepthStencilAttachmentOptimal, 1);
+}
+
+void Graphics::CreateMSAAResources()
+{
+	m_MSAAImage = CreateImage(m_swapChainCapabilities.currentExtent.width, m_swapChainCapabilities.currentExtent.height, 1,
+		m_MSAALevel, m_swapChainInfo.imageFormat, vk::ImageTiling::eOptimal,
+		vk::ImageUsageFlagBits::eTransientAttachment | vk::ImageUsageFlagBits::eColorAttachment,
+		vk::MemoryPropertyFlagBits::eDeviceLocal, m_MSAAImageMemory);
+
+	m_MSAAImageView = CreateImageView(m_MSAAImage, m_swapChainInfo.imageFormat, vk::ImageAspectFlagBits::eColor, 1);
 }
 
 void Graphics::CreateWindowSurface()
@@ -1417,17 +1480,56 @@ bool Graphics::IsDeviceSuitable(const vk::PhysicalDevice& device)
 	// get max GPU samples for MSAA
 	vk::SampleCountFlags sampleCountFlags = m_physicalDeviceProps.limits.framebufferColorSampleCounts & m_physicalDeviceProps.limits.framebufferDepthSampleCounts;
 	if (sampleCountFlags & vk::SampleCountFlagBits::e64)
-		m_maxMSAA = vk::SampleCountFlagBits::e64;
+		m_MSAAMax = vk::SampleCountFlagBits::e64;
 	else if (sampleCountFlags & vk::SampleCountFlagBits::e32)
-		m_maxMSAA = vk::SampleCountFlagBits::e32;
+		m_MSAAMax = vk::SampleCountFlagBits::e32;
 	else if (sampleCountFlags & vk::SampleCountFlagBits::e16)
-		m_maxMSAA = vk::SampleCountFlagBits::e16;
+		m_MSAAMax = vk::SampleCountFlagBits::e16;
 	else if (sampleCountFlags & vk::SampleCountFlagBits::e8)
-		m_maxMSAA = vk::SampleCountFlagBits::e8;
+		m_MSAAMax = vk::SampleCountFlagBits::e8;
 	else if (sampleCountFlags & vk::SampleCountFlagBits::e4)
-		m_maxMSAA = vk::SampleCountFlagBits::e4;
+		m_MSAAMax = vk::SampleCountFlagBits::e4;
 	else if (sampleCountFlags & vk::SampleCountFlagBits::e2)
-		m_maxMSAA = vk::SampleCountFlagBits::e2;
+		m_MSAAMax = vk::SampleCountFlagBits::e2;
+
+	auto settings = Settings::Get()->GetGraphicsSettings();
+	switch (settings.eMSAA)
+	{
+	case MSAAOptions::X1:
+		m_MSAALevel = vk::SampleCountFlagBits::e1; // no multisampling
+		LOG_DEBUG("MSAAOptions::X1 / VK_SAMPLE_COUNT_1_BIT");
+		break;
+	case MSAAOptions::X2:
+		m_MSAALevel = vk::SampleCountFlagBits::e2; // 2x multisampling
+		LOG_DEBUG("MSAAOptions::X2 / VK_SAMPLE_COUNT_2_BIT");
+		break;
+	case MSAAOptions::X4:
+		m_MSAALevel = vk::SampleCountFlagBits::e4; // 4x multisampling
+		LOG_DEBUG("MSAAOptions::X4 / VK_SAMPLE_COUNT_4_BIT");
+		break;
+	case MSAAOptions::X8:
+		m_MSAALevel = vk::SampleCountFlagBits::e8; // 8x multisampling
+		LOG_DEBUG("MSAAOptions::X8 / VK_SAMPLE_COUNT_8_BIT");
+		break;
+	case MSAAOptions::X16:
+		m_MSAALevel = vk::SampleCountFlagBits::e16; // 16x multisampling
+		LOG_DEBUG("MSAAOptions::X16 / VK_SAMPLE_COUNT_16_BIT");
+		break;
+	case MSAAOptions::X32:
+		m_MSAALevel = vk::SampleCountFlagBits::e32; // 32x multisampling
+		LOG_DEBUG("MSAAOptions::X32 / VK_SAMPLE_COUNT_32_BIT");
+		break;
+	case MSAAOptions::X64:
+		m_MSAALevel = vk::SampleCountFlagBits::e64; // 64x multisampling
+		LOG_DEBUG("MSAAOptions::X64 / VK_SAMPLE_COUNT_64_BIT");
+		break;
+	}
+
+	if (m_MSAALevel > m_MSAAMax)
+	{
+		LOG_WARNING("Requested MSAA is not supported, clamping to max MSAA...");
+		m_MSAALevel = m_MSAAMax;
+	}
 
 	device.getFeatures(&m_physicalDeviceFeatures);
 	if (!m_physicalDeviceFeatures.geometryShader)
@@ -1694,8 +1796,8 @@ void Graphics::CleanupVulkan()
 
 	m_logicalDevice.destroyDescriptorPool(m_descriptorPool, nullptr);
 
-	m_logicalDevice.destroyDescriptorSetLayout(m_descriptorSetLayoutDynamicUBO, nullptr);
-	m_logicalDevice.destroyDescriptorSetLayout(m_descriptorSetLayoutSampler, nullptr);
+	m_logicalDevice.destroyDescriptorSetLayout(m_dynamicUBODescriptorSetLayout, nullptr);
+	m_logicalDevice.destroyDescriptorSetLayout(m_samplerDescriptorSetLayout, nullptr);
 
 	m_logicalDevice.destroyPipeline(m_pipelineGraphics, nullptr);
 	m_logicalDevice.destroyPipelineLayout(m_pipelineLayout, nullptr);
