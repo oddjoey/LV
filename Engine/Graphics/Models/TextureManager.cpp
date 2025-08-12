@@ -27,27 +27,25 @@ std::vector<vk::DescriptorImageInfo> TextureManager::CreateTextures()
 {
 	LOG_INFO("Creating textures...");
 
-	auto graphics = Graphics::Get();
-
 	std::vector<vk::DescriptorImageInfo> textureDescriptors(m_textures.size());
 	for (auto& texture : m_textures)
 	{
 		auto textureSize = static_cast<vk::DeviceSize>(texture->m_width * texture->m_height * texture->m_stride);
 
 		vk::DeviceMemory imageMemory;
-		texture->m_image = graphics->CreateImage(texture->m_width, texture->m_height, texture->m_mipLevels, vk::SampleCountFlagBits::e1,
+		texture->m_image = m_graphics->CreateImage(texture->m_width, texture->m_height, texture->m_mipLevels, vk::SampleCountFlagBits::e1,
 			texture->m_format, vk::ImageTiling::eOptimal, 
 			vk::ImageUsageFlagBits::eTransferSrc | vk::ImageUsageFlagBits::eTransferDst | vk::ImageUsageFlagBits::eSampled,
 			vk::MemoryPropertyFlagBits::eDeviceLocal, imageMemory, true);
 
-		graphics->TransitionImageLayout(texture->m_image, texture->m_format, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, texture->m_mipLevels);
-		graphics->CopyDataToImage(texture->m_pixels, textureSize, texture->m_image, texture->m_width, texture->m_height);
-		graphics->GenerateMipmaps(texture->m_image, texture->m_width, texture->m_height, texture->m_mipLevels);
+		m_graphics->TransitionImageLayout(texture->m_image, texture->m_format, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, texture->m_mipLevels);
+		m_graphics->CopyDataToImage(texture->m_pixels, textureSize, texture->m_image, texture->m_width, texture->m_height);
+		m_graphics->GenerateMipmaps(texture->m_image, texture->m_width, texture->m_height, texture->m_mipLevels);
 		texture->FreeTexture();
 
-		texture->m_imageView = graphics->CreateImageView(texture->m_image, texture->m_format, vk::ImageAspectFlagBits::eColor, texture->m_mipLevels, true);
+		texture->m_imageView = m_graphics->CreateImageView(texture->m_image, texture->m_format, vk::ImageAspectFlagBits::eColor, texture->m_mipLevels, true);
 
-		texture->m_sampler = graphics->CreateSampler(true);
+		texture->m_sampler = m_graphics->CreateSampler(true);
 
 		texture->m_descriptor.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal;
 		texture->m_descriptor.imageView = texture->m_imageView;
@@ -77,6 +75,7 @@ uint32_t TextureManager::GetTextureIndex(const std::string textureName)
 
 TextureManager::TextureManager()
 {
+	m_graphics = Graphics::Get();
 }
 
 TextureManager::~TextureManager()

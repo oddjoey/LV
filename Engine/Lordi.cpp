@@ -23,6 +23,7 @@ Lordi::~Lordi()
 bool Lordi::InitializeSystems()
 {
 	LOG_INFO("Initializing Lordi's systems...");
+	m_graphics = Graphics::Get();
 
 	m_textureManager = TextureManager::Get();
 	auto sheepTexture = m_textureManager->CreateTexture({ "Sheep", "Engine/Graphics/Resources/sheep.png" });
@@ -37,13 +38,13 @@ bool Lordi::InitializeSystems()
 	auto bear = m_objectManager->CreateObject({ { 0.f, -1.f, 0.f }, { 90.f, 90.f, 0.f, 0.f }, { 1.f, 1.f, 1.f }, bearModel->GetIndex(), bearTexture->GetIndex() });
 
 	m_cameraManager = CameraManager::Get();
-	auto camera = m_cameraManager->CreateCamera({ { 2.f, 2.f, 2.f }, { 0.f, 0.f, 0.f, 0.f }, { 1.f, 1.f, 1.f }, 45.f, 0.1f, 10.f });
+	auto camera = m_cameraManager->CreateCamera({ { -2.f, -2.f, 2.f }, { 0.f, 0.f, 0.f, 0.f }, { 1.f, 1.f, 1.f }, 45.f, 0.1f, 10.f });
 	camera->LookAt({ 0.f, 0.f, 0.f });
 	m_cameraManager->SetActiveCamera(camera);
 
 	m_settings = Settings::Get();
-	m_graphics = Graphics::Get();
 	m_renderer = Renderer::Get();
+	m_imGUIManager = IMGUIManager::Get();
 
 	LOG_SUCCESS("Lordi's systems initialized successfully!");
 	 
@@ -87,6 +88,9 @@ void Lordi::Initialize()
 			throw std::runtime_error("Failed to start Lordi.");
 
 		MainLoop();
+
+		m_imGUIManager->Cleanup();
+		m_graphics->CleanupVulkan();
 	}
 	catch (const std::exception& e)
 	{

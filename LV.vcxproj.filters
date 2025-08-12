@@ -30,7 +30,7 @@
     <ClCompile Include="Engine\Graphics\Graphics.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\Graphics\Objects\ObjectManager.cpp">
+    <ClCompile Include="Engine\Objects\ObjectManager.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Graphics\Models\Model.cpp">
@@ -42,7 +42,7 @@
     <ClCompile Include="Engine\Graphics\Renderer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\Graphics\Objects\Object.cpp">
+    <ClCompile Include="Engine\Objects\Object.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Graphics\Models\Texture.cpp">
@@ -51,13 +51,40 @@
     <ClCompile Include="Engine\Graphics\Models\TextureManager.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\Graphics\Objects\Entity.cpp">
+    <ClCompile Include="Engine\Objects\Entity.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\Graphics\Objects\Camera.cpp">
+    <ClCompile Include="Engine\Objects\Camera.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\Graphics\Objects\CameraManager.cpp">
+    <ClCompile Include="Engine\Objects\CameraManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Graphics\IMGUI\IMGUIManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Libraries\imgui\imgui.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Libraries\imgui\imgui_demo.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Libraries\imgui\imgui_draw.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Libraries\imgui\imgui_tables.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Libraries\imgui\imgui_widgets.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Libraries\imgui\backends\imgui_impl_glfw.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Libraries\imgui\backends\imgui_impl_vulkan.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Libraries\imgui\misc\cpp\imgui_stdlib.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -83,7 +110,7 @@
     <ClInclude Include="Engine\Graphics\Renderer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\Graphics\Objects\ObjectManager.h">
+    <ClInclude Include="Engine\Objects\ObjectManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Graphics\Models\ModelManager.h">
@@ -92,7 +119,7 @@
     <ClInclude Include="Engine\Graphics\Models\Model.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\Graphics\Objects\Object.h">
+    <ClInclude Include="Engine\Objects\Object.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Graphics\Models\Texture.h">
@@ -101,13 +128,43 @@
     <ClInclude Include="Engine\Graphics\Models\TextureManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\Graphics\Objects\Entity.h">
+    <ClInclude Include="Engine\Objects\Entity.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\Graphics\Objects\Camera.h">
+    <ClInclude Include="Engine\Objects\Camera.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\Graphics\Objects\CameraManager.h">
+    <ClInclude Include="Engine\Objects\CameraManager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Graphics\IMGUI\IMGUIManager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Libraries\imgui\imstb_truetype.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Libraries\imgui\imconfig.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Libraries\imgui\imgui.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Libraries\imgui\imgui_internal.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Libraries\imgui\imstb_rectpack.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Libraries\imgui\imstb_textedit.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Libraries\imgui\backends\imgui_impl_glfw.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Libraries\imgui\backends\imgui_impl_vulkan.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Libraries\imgui\misc\cpp\imgui_stdlib.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -117,5 +174,9 @@
     <None Include="Engine\Shaders\compile.bat">
       <Filter>Source Files</Filter>
     </None>
+    <None Include="Libraries\imgui\misc\debuggers\imgui.natstepfilter" />
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="Libraries\imgui\misc\debuggers\imgui.natvis" />
   </ItemGroup>
 </Project>

@@ -72,21 +72,25 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>D:\Programming\Libraries\glfw\glfw\include;$(IncludePath)</IncludePath>
+    <IncludePath>G:\Programming\Libraries\stb_image;G:\Programming\Libraries\magic_enum-v0.9.7\include;G:\Programming\Libraries\termcolor;G:\Programming\Libraries\Vulkan-SDK\Include;G:\Programming\Libraries\glm;G:\Programming\Libraries\tinyobjloader;G:\Programming\Libraries\imgui;G:\Programming\Libraries\glfw\glfw\include;$(IncludePath)</IncludePath>
+    <SourcePath>G:\Programming\Libraries\imgui\imgui;$(SourcePath)</SourcePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>D:\Programming\Libraries\glfw\glfw\include;$(IncludePath)</IncludePath>
+    <IncludePath>G:\Programming\Libraries\stb_image;G:\Programming\Libraries\magic_enum-v0.9.7\include;G:\Programming\Libraries\termcolor;G:\Programming\Libraries\Vulkan-SDK\Include;G:\Programming\Libraries\glm;G:\Programming\Libraries\tinyobjloader;G:\Programming\Libraries\imgui;G:\Programming\Libraries\glfw\glfw\include;$(IncludePath)</IncludePath>
+    <SourcePath>G:\Programming\Libraries\imgui\imgui;$(SourcePath)</SourcePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>D:\Programming\Libraries\glfw\glfw\include;$(IncludePath)</IncludePath>
+    <IncludePath>G:\Programming\Libraries\Vulkan-SDK\Include;G:\Programming\Libraries\stb_image;G:\Programming\Libraries\magic_enum-v0.9.7\include;G:\Programming\Libraries\termcolor;G:\Programming\Libraries\glm;G:\Programming\Libraries\tinyobjloader;G:\Programming\Libraries\glfw\glfw\include;G:\Programming\C++\Projects\LV\Libraries\imgui\backends;G:\Programming\C++\Projects\LV\Libraries\imgui;$(IncludePath)</IncludePath>
     <LibraryPath>D:\Programming\Libraries\glfw\build\src\Debug;$(LibraryPath)</LibraryPath>
+    <SourcePath>$(SourcePath)</SourcePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>D:\Programming\Libraries\glfw\glfw\include;$(IncludePath)</IncludePath>
+    <IncludePath>G:\Programming\Libraries\Vulkan-SDK\Include;G:\Programming\Libraries\stb_image;G:\Programming\Libraries\magic_enum-v0.9.7\include;G:\Programming\Libraries\termcolor;G:\Programming\Libraries\glm;G:\Programming\Libraries\tinyobjloader;G:\Programming\Libraries\glfw\glfw\include;G:\Programming\C++\Projects\LV\Libraries\imgui\backends;G:\Programming\C++\Projects\LV\Libraries\imgui;$(IncludePath)</IncludePath>
     <LibraryPath>D:\Programming\Libraries\glfw\build\src\Release;$(LibraryPath)</LibraryPath>
+    <SourcePath>$(SourcePath)</SourcePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -94,7 +98,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Programming\Libraries\tinyobjloader;D:\Programming\Libraries\glm;D:\Programming\Libraries\Vulkan-SDK\Include;D:\Programming\Libraries\termcolor;D:\Programming\Libraries\magic_enum-v0.9.7\include;D:\Programming\Libraries\stb_image;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
@@ -114,7 +118,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>WIN32;NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Programming\Libraries\tinyobjloader;D:\Programming\Libraries\glm;D:\Programming\Libraries\Vulkan-SDK\Include;D:\Programming\Libraries\termcolor;D:\Programming\Libraries\magic_enum-v0.9.7\include;D:\Programming\Libraries\stb_image;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
@@ -134,7 +138,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Programming\Libraries\tinyobjloader;D:\Programming\Libraries\glm;D:\Programming\Libraries\Vulkan-SDK\Include;D:\Programming\Libraries\termcolor;D:\Programming\Libraries\magic_enum-v0.9.7\include;D:\Programming\Libraries\stb_image;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
@@ -154,7 +158,7 @@
       <SDLCheck>true</SDLCheck>
       <PreprocessorDefinitions>NDEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <ConformanceMode>true</ConformanceMode>
-      <AdditionalIncludeDirectories>D:\Programming\Libraries\tinyobjloader;D:\Programming\Libraries\glm;D:\Programming\Libraries\Vulkan-SDK\Include;D:\Programming\Libraries\termcolor;D:\Programming\Libraries\magic_enum-v0.9.7\include;D:\Programming\Libraries\stb_image;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
+      <AdditionalIncludeDirectories>%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <LanguageStandard_C>stdc17</LanguageStandard_C>
       <LanguageStandard>stdcpp20</LanguageStandard>
       <RuntimeLibrary>MultiThreadedDLL</RuntimeLibrary>
@@ -169,44 +173,67 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="Engine\Graphics\Objects\CameraManager.cpp" />
-    <ClCompile Include="Engine\Graphics\Objects\Camera.cpp" />
+    <ClCompile Include="Engine\Objects\CameraManager.cpp" />
+    <ClCompile Include="Engine\Objects\Camera.cpp" />
     <ClCompile Include="Engine\Graphics\Graphics.cpp" />
     <ClCompile Include="Engine\Graphics\Models\Model.cpp" />
     <ClCompile Include="Engine\Graphics\Models\ModelManager.cpp" />
-    <ClCompile Include="Engine\Graphics\Objects\Entity.cpp" />
-    <ClCompile Include="Engine\Graphics\Objects\ObjectManager.cpp" />
+    <ClCompile Include="Engine\Objects\Entity.cpp" />
+    <ClCompile Include="Engine\Objects\ObjectManager.cpp" />
     <ClCompile Include="Engine\Graphics\Renderer.cpp" />
+    <ClCompile Include="Libraries\imgui\backends\imgui_impl_glfw.cpp" />
+    <ClCompile Include="Libraries\imgui\backends\imgui_impl_vulkan.cpp" />
+    <ClCompile Include="Libraries\imgui\imgui.cpp" />
+    <ClCompile Include="Libraries\imgui\imgui_demo.cpp" />
+    <ClCompile Include="Libraries\imgui\imgui_draw.cpp" />
+    <ClCompile Include="Libraries\imgui\imgui_tables.cpp" />
+    <ClCompile Include="Libraries\imgui\imgui_widgets.cpp" />
+    <ClCompile Include="Libraries\imgui\misc\cpp\imgui_stdlib.cpp" />
     <ClCompile Include="Engine\Lordi.cpp" />
     <ClCompile Include="Engine\Settings.cpp" />
     <ClCompile Include="Engine\Utility.cpp" />
+    <ClCompile Include="Engine\Graphics\IMGUI\IMGUIManager.cpp" />
     <ClCompile Include="main.cpp" />
-    <ClCompile Include="Engine\Graphics\Objects\Object.cpp" />
+    <ClCompile Include="Engine\Objects\Object.cpp" />
     <ClCompile Include="Engine\Graphics\Models\Texture.cpp" />
     <ClCompile Include="Engine\Graphics\Models\TextureManager.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="Engine\Graphics\Objects\CameraManager.h" />
-    <ClInclude Include="Engine\Graphics\Objects\Camera.h" />
+    <ClInclude Include="Engine\Objects\CameraManager.h" />
+    <ClInclude Include="Engine\Objects\Camera.h" />
     <ClInclude Include="Engine\Graphics\Graphics.h" />
     <ClInclude Include="Engine\Graphics\Models\Model.h" />
     <ClInclude Include="Engine\Graphics\Models\ModelManager.h" />
-    <ClInclude Include="Engine\Graphics\Objects\Entity.h" />
+    <ClInclude Include="Engine\Objects\Entity.h" />
     <ClInclude Include="Engine\Graphics\Renderer.h" />
-    <ClInclude Include="Engine\Graphics\Objects\ObjectManager.h" />
+    <ClInclude Include="Engine\Objects\ObjectManager.h" />
+    <ClInclude Include="Libraries\imgui\backends\imgui_impl_glfw.h" />
+    <ClInclude Include="Libraries\imgui\backends\imgui_impl_vulkan.h" />
+    <ClInclude Include="Libraries\imgui\imconfig.h" />
+    <ClInclude Include="Libraries\imgui\imgui.h" />
+    <ClInclude Include="Libraries\imgui\imgui_internal.h" />
+    <ClInclude Include="Libraries\imgui\imstb_rectpack.h" />
+    <ClInclude Include="Libraries\imgui\imstb_textedit.h" />
+    <ClInclude Include="Libraries\imgui\imstb_truetype.h" />
+    <ClInclude Include="Libraries\imgui\misc\cpp\imgui_stdlib.h" />
     <ClInclude Include="Engine\Lordi.h" />
     <ClInclude Include="Engine\Graphics.h" />
     <ClInclude Include="Engine\Logger.h" />
     <ClInclude Include="Engine\Settings.h" />
     <ClInclude Include="Engine\Utility.h" />
-    <ClInclude Include="Engine\Graphics\Objects\Object.h" />
+    <ClInclude Include="Engine\Objects\Object.h" />
     <ClInclude Include="Engine\Graphics\Models\Texture.h" />
     <ClInclude Include="Engine\Graphics\Models\TextureManager.h" />
+    <ClInclude Include="Engine\Graphics\IMGUI\IMGUIManager.h" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="Libraries\imgui\misc\debuggers\imgui.natstepfilter" />
     <None Include="Engine\Shaders\compile.bat" />
     <None Include="Engine\Shaders\shader.frag" />
     <None Include="Engine\Shaders\shader.vert" />
+  </ItemGroup>
+  <ItemGroup>
+    <Natvis Include="Libraries\imgui\misc\debuggers\imgui.natvis" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -8,9 +8,8 @@
 #endif // _DEBUG
 
 #include "Settings.h"
-#include "Graphics/Graphics.h"
-#include "Graphics/Objects/ObjectManager.h"
 #include "Graphics/Renderer.h"
+#include "Objects/ObjectManager.h"
 
 class Lordi
 {
@@ -41,5 +40,6 @@ private:
 	std::shared_ptr<TextureManager>		m_textureManager = nullptr;
 	std::shared_ptr<ObjectManager>		m_objectManager = nullptr;
 	std::shared_ptr<CameraManager>		m_cameraManager = nullptr;
+	std::shared_ptr<IMGUIManager>		m_imGUIManager = nullptr;
 };
 

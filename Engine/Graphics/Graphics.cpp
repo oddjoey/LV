@@ -15,7 +15,7 @@ std::shared_ptr<Graphics> Graphics::Get()
 	return s_instance;
 }
 
-void Graphics::SetupVulkan()
+Graphics::Graphics()
 {
 	VULKAN_HPP_DEFAULT_DISPATCHER.init(vkGetInstanceProcAddr);
 
@@ -42,25 +42,22 @@ void Graphics::SetupVulkan()
 	CreateRenderPass();
 
 	CreateCommandPools();
-	CreateCommandBuffers();
-}
+	CreateMainCommandBuffers();
 
-Graphics::Graphics()
-{
-
+	CreateMSAAResources();
 }
 
 Graphics::~Graphics()
 {
 	
-	CleanupVulkan();
+	
 }
 
 void Graphics::CreateVulkanInstance() 
 {
 	LOG_INFO("Creating Vulkan instance...");
 
-	vk::ApplicationInfo appInfo { 
+	applicationInfo = {
 		.pApplicationName = "Lordi",
 		.applicationVersion = VK_MAKE_VERSION(1, 0, 0),
 		.pEngineName = "Lordi Engine",
@@ -69,7 +66,7 @@ void Graphics::CreateVulkanInstance()
 	};
 
 	vk::InstanceCreateInfo createInfo {
-		.pApplicationInfo = &appInfo,
+		.pApplicationInfo = &applicationInfo,
 		.enabledExtensionCount = 0,
 	};
 
@@ -91,7 +88,7 @@ void Graphics::CreateVulkanInstance()
 		vk::DebugUtilsMessageSeverityFlagBitsEXT::eVerbose | vk::DebugUtilsMessageSeverityFlagBitsEXT::eWarning | vk::DebugUtilsMessageSeverityFlagBitsEXT::eError;
 	m_debugCreateInfo.messageType = 
 		vk::DebugUtilsMessageTypeFlagBitsEXT::eGeneral | vk::DebugUtilsMessageTypeFlagBitsEXT::eValidation | vk::DebugUtilsMessageTypeFlagBitsEXT::ePerformance;
-	m_debugCreateInfo.pfnUserCallback = DebugCallback;
+	m_debugCreateInfo.pfnUserCallback = VulkanDebugCallback;
 
 	createInfo.pNext = &m_debugCreateInfo;
 #endif // _DEBUG
@@ -175,8 +172,9 @@ void Graphics::CreateLogicalDevice()
 	}
 
 	vk::PhysicalDeviceFeatures deviceFeatures {};
-	deviceFeatures.samplerAnisotropy = vk::True;
 	deviceFeatures.depthBounds = vk::True;
+	deviceFeatures.samplerAnisotropy = vk::True;
+	deviceFeatures.sampleRateShading = vk::True;
 
 	vk::PhysicalDeviceDescriptorIndexingFeatures descriptorIndexFeatures {
 		.shaderSampledImageArrayNonUniformIndexing = vk::True,
@@ -224,57 +222,57 @@ void Graphics::CreateSwapChain()
 	switch (graphicsSettings.eVSync)
 	{
 		case VSyncOptions::NONE:
-			m_requestedPresentMode = vk::PresentModeKHR::eImmediate; // No VSync
+			m_swapChainRequestedPresentMode = vk::PresentModeKHR::eImmediate; // No VSync
 			LOG_DEBUG("VSyncOptions::NONE / VK_PRESENT_MODE_IMMEDIATE_KHR");
 			break;
 		case VSyncOptions::ENABLED:
-			m_requestedPresentMode = vk::PresentModeKHR::eFifo; // VSync
+			m_swapChainRequestedPresentMode = vk::PresentModeKHR::eFifo; // VSync
 			LOG_DEBUG("VSyncOptions::ENABLED / VK_PRESENT_MODE_FIFO_KHR");
 			break;
 		case VSyncOptions::RELAXED:
-			m_requestedPresentMode = vk::PresentModeKHR::eFifoRelaxed; // Relaxed VSync
+			m_swapChainRequestedPresentMode = vk::PresentModeKHR::eFifoRelaxed; // Relaxed VSync
 			LOG_DEBUG("VSyncOptions::RELAXED / VK_PRESENT_MODE_FIFO_RELAXED_KHR");
 			break;
 		case VSyncOptions::MAILBOX:
-			m_requestedPresentMode = vk::PresentModeKHR::eMailbox; // Mailbox VSync
+			m_swapChainRequestedPresentMode = vk::PresentModeKHR::eMailbox; // Mailbox VSync
 			LOG_DEBUG("VSyncOptions::MAILBOX / VK_PRESENT_MODE_MAILBOX_KHR");
 			break;
 	}
 
-	vk::PresentModeKHR swapChainPresentMode = vk::PresentModeKHR::eFifo;
+	m_swapChainPresentMode = vk::PresentModeKHR::eFifo;
 	bool presentFound = false;
 	for (const auto& presentMode : m_swapChainPresentModes)
-		if (presentMode == m_requestedPresentMode)
+		if (presentMode == m_swapChainRequestedPresentMode)
 		{
 			presentFound = true;
-			swapChainPresentMode = presentMode;
+			m_swapChainPresentMode = presentMode;
 			break;
 		}
 	if (!presentFound)
 		LOG_WARNING("Requested present mode not found on device, using defaults (FIFO / VYSNC) as its guaranteed...");
 
 	vk::Extent2D swapChainExtent = {};
-	if (m_swapChainCapabilities.currentExtent.width == UINT32_MAX)
+	if (m_windowSurfaceCapabilities.currentExtent.width == UINT32_MAX)
 	{
 		int width, height;
 		glfwGetFramebufferSize(m_window, &width, &height);
-		swapChainExtent.width = std::clamp(static_cast<uint32_t>(width), m_swapChainCapabilities.minImageExtent.width, m_swapChainCapabilities.maxImageExtent.width);
-		swapChainExtent.height = std::clamp(static_cast<uint32_t>(height), m_swapChainCapabilities.minImageExtent.height, m_swapChainCapabilities.maxImageExtent.height);
+		swapChainExtent.width = std::clamp(static_cast<uint32_t>(width), m_windowSurfaceCapabilities.minImageExtent.width, m_windowSurfaceCapabilities.maxImageExtent.width);
+		swapChainExtent.height = std::clamp(static_cast<uint32_t>(height), m_windowSurfaceCapabilities.minImageExtent.height, m_windowSurfaceCapabilities.maxImageExtent.height);
 	}
 	else
-		swapChainExtent = m_swapChainCapabilities.currentExtent;
+		swapChainExtent = m_windowSurfaceCapabilities.currentExtent;
 
-	uint32_t swapChainImageCount = m_swapChainCapabilities.minImageCount + 1;
-	if (m_swapChainCapabilities.maxImageCount > 0 && swapChainImageCount > m_swapChainCapabilities.maxImageCount)
+	m_swapChainImageCount = m_windowSurfaceCapabilities.minImageCount + 1;
+	if (m_windowSurfaceCapabilities.maxImageCount > 0 && m_swapChainImageCount > m_windowSurfaceCapabilities.maxImageCount)
 	{
 		LOG_WARNING("Swap chain image count exceeds maximum, clamping to maximum...");
-		swapChainImageCount = m_swapChainCapabilities.maxImageCount;
+		m_swapChainImageCount = m_windowSurfaceCapabilities.maxImageCount;
 	}
 
 	m_swapChainInfo = {
 		.flags = {},
 		.surface = m_windowSurface,
-		.minImageCount = swapChainImageCount,
+		.minImageCount = m_swapChainImageCount,
 		.imageFormat = m_swapChainFormat.format,
 		.imageColorSpace = m_swapChainFormat.colorSpace,
 		.imageExtent = swapChainExtent,
@@ -305,10 +303,10 @@ void Graphics::CreateSwapChain()
 		m_swapChainInfo.pQueueFamilyIndices = nullptr;
 	}
 
-	m_swapChainInfo.preTransform = m_swapChainCapabilities.currentTransform;
+	m_swapChainInfo.preTransform = m_windowSurfaceCapabilities.currentTransform;
 	m_swapChainInfo.compositeAlpha = vk::CompositeAlphaFlagBitsKHR::eOpaque;
 	// presentation mode (VSync)
-	m_swapChainInfo.presentMode = swapChainPresentMode;
+	m_swapChainInfo.presentMode = m_swapChainPresentMode;
 	// clipped swap chain images provide the best performance compared to non-clipped images
 	// clipped images are not presented if they are obscured by other windows
 	m_swapChainInfo.clipped = VK_TRUE;
@@ -320,11 +318,11 @@ void Graphics::CreateSwapChain()
 		throw std::runtime_error("failed to create swapchain!");
 
 	// Get swap chain images
-	if (m_logicalDevice.getSwapchainImagesKHR(m_swapChain, &swapChainImageCount, nullptr) != vk::Result::eSuccess || !swapChainImageCount)
+	if (m_logicalDevice.getSwapchainImagesKHR(m_swapChain, &m_swapChainImageCount, nullptr) != vk::Result::eSuccess || !m_swapChainImageCount)
 		throw std::runtime_error("No swapchain images found!");
 
-	m_swapChainImages = std::vector<vk::Image>(swapChainImageCount);
-	if (m_logicalDevice.getSwapchainImagesKHR(m_swapChain, &swapChainImageCount, m_swapChainImages.data()) != vk::Result::eSuccess || !swapChainImageCount)
+	m_swapChainImages = std::vector<vk::Image>(m_swapChainImageCount);
+	if (m_logicalDevice.getSwapchainImagesKHR(m_swapChain, &m_swapChainImageCount, m_swapChainImages.data()) != vk::Result::eSuccess || !m_swapChainImageCount)
 		throw std::runtime_error("No swapchain images found!");
 
 	LOG_SUCCESS("Swapchain created successfully!");
@@ -381,7 +379,7 @@ void Graphics::CreateRenderPass()
 		.attachment = 2,
 		.layout = vk::ImageLayout::eColorAttachmentOptimal
 	};
-	vk::AttachmentDescription colorAttachmentResolve{
+	vk::AttachmentDescription colorAttachmentResolve {
 		.flags = {},
 		.format = m_swapChainInfo.imageFormat,
 		.samples = vk::SampleCountFlagBits::e1,
@@ -428,7 +426,7 @@ void Graphics::CreateRenderPass()
 	};
 
 	if (m_logicalDevice.createRenderPass(&renderPassInfo, nullptr, &m_renderPass) != vk::Result::eSuccess)
-		throw std::runtime_error("failed to create render pass!");
+		throw std::runtime_error("Failed to create render pass!");
 
 	LOG_SUCCESS("Render pass created successfully!");
 }
@@ -557,8 +555,8 @@ void Graphics::CreateGraphicsPipeline()
 	vk::PipelineMultisampleStateCreateInfo multisamplingInfo {
 		.flags = {},
 		.rasterizationSamples = m_MSAALevel,
-		.sampleShadingEnable = VK_FALSE,
-		.minSampleShading = 1.0f,
+		.sampleShadingEnable = vk::True,
+		.minSampleShading = 0.2f,
 		.pSampleMask = nullptr,
 		.alphaToCoverageEnable = VK_FALSE,
 		.alphaToOneEnable = VK_FALSE
@@ -704,87 +702,9 @@ void Graphics::CreateCommandPools()
 	LOG_SUCCESS("Successfully created command pools!");
 }
 
-void Graphics::CreateCommandBuffers()
+void Graphics::CreateMainCommandBuffers()
 {
-	LOG_INFO("Creating command buffer...");
-
-	m_commandBuffers = std::vector<vk::CommandBuffer>(m_maxFramesInFlight);
-
-	vk::CommandBufferAllocateInfo allocateInfo {
-		.commandPool = m_commandPoolDraw,
-		.level = vk::CommandBufferLevel::ePrimary,
-		.commandBufferCount = static_cast<uint32_t>(m_commandBuffers.size())
-	};
-
-	if (m_logicalDevice.allocateCommandBuffers(&allocateInfo, m_commandBuffers.data()) != vk::Result::eSuccess)
-		throw std::runtime_error("failed to allocate command buffers!");
-
-	LOG_SUCCESS("Created command buffer successfully!");
-}
-
-void Graphics::DrawFrame()
-{
-	if (m_logicalDevice.waitForFences(1, &m_frameInFlightFences[m_frameInFlightIndex], VK_TRUE, UINT64_MAX) != vk::Result::eSuccess)
-		throw std::runtime_error("waitForFences failed!");
-
-	uint32_t imageIndex = 0;
-	vk::Result result = m_logicalDevice.acquireNextImageKHR(m_swapChain, UINT64_MAX,
-		m_imageAvailableSemaphores[m_frameInFlightIndex], VK_NULL_HANDLE, &imageIndex);
-
-	if (result == vk::Result::eErrorOutOfDateKHR)
-	{
-		LOG_WARNING("Swap chain out of date, recreating swap chain...");
-		RecreateSwapChain();
-		return;
-	}
-	else if (result != vk::Result::eSuccess && result != vk::Result::eSuboptimalKHR)
-		throw std::runtime_error("failed to acquire swap chain image!");
-
-	if (m_logicalDevice.resetFences(1, &m_frameInFlightFences[m_frameInFlightIndex]) != vk::Result::eSuccess)
-		throw std::runtime_error("resetFences failed!");
-
-	m_commandBuffers[m_frameInFlightIndex].reset();
-	//RecordCommandBuffer(m_commandBuffers[m_frameInFlightIndex], m_frameBuffers[imageIndex]);
-
-	std::vector<vk::Semaphore> waitSemaphores = { m_imageAvailableSemaphores[m_frameInFlightIndex] };
-	std::vector<vk::PipelineStageFlags> waitStages = { vk::PipelineStageFlagBits::eColorAttachmentOutput }; 
-	std::vector<vk::Semaphore> signalSemaphores = { m_renderFinishedSemaphores[imageIndex] };
-	
-	vk::SubmitInfo submitInfo {
-		.waitSemaphoreCount = 1,
-		.pWaitSemaphores = waitSemaphores.data(),
-		.pWaitDstStageMask = waitStages.data(),
-		.commandBufferCount = 1,
-		.pCommandBuffers = &m_commandBuffers[m_frameInFlightIndex],
-		.signalSemaphoreCount = 1,
-		.pSignalSemaphores = signalSemaphores.data()
-	};
-
-	if (m_queueGraphics.submit(1, &submitInfo, m_frameInFlightFences[m_frameInFlightIndex]) != vk::Result::eSuccess)
-		throw std::runtime_error("failed to submit draw command buffer!");
-
-	std::vector<vk::SwapchainKHR> swapChains = { m_swapChain };
-
-	vk::PresentInfoKHR presentInfo {
-		.waitSemaphoreCount = 1,
-		.pWaitSemaphores = signalSemaphores.data(),
-		.swapchainCount = 1,
-		.pSwapchains = swapChains.data(),
-		.pImageIndices = &imageIndex,
-		.pResults = nullptr
-	};
-	
-	result = m_queueGraphics.presentKHR(&presentInfo);
-	if (result == vk::Result::eErrorOutOfDateKHR || result == vk::Result::eSuboptimalKHR || m_framebufferResized)
-	{
-		LOG_WARNING("Swap chain out of date, recreating swap chain...");
-		RecreateSwapChain();
-		m_framebufferResized = false;
-	}
-	else if (result != vk::Result::eSuccess)
-		throw std::runtime_error("failed to present swap chain image!");
-
-	m_frameInFlightIndex = ++m_frameInFlightIndex % m_maxFramesInFlight;
+	m_commandBuffers = CreateCommandBuffers(m_maxFramesInFlight);
 }
 
 void Graphics::CreateSyncObjects()
@@ -795,8 +715,8 @@ void Graphics::CreateSyncObjects()
 		.flags = {}
 	};
 
-	m_imageAvailableSemaphores = std::vector<vk::Semaphore>(m_maxFramesInFlight, VK_NULL_HANDLE);
-	m_frameInFlightFences = std::vector<vk::Fence>(m_maxFramesInFlight, VK_NULL_HANDLE);
+	m_imageAvailableSemaphores = std::vector<vk::Semaphore>(m_maxFramesInFlight, nullptr);
+	m_frameInFlightFences = std::vector<vk::Fence>(m_maxFramesInFlight, nullptr);
 
 	vk::FenceCreateInfo fenceInfo {
 		.flags = vk::FenceCreateFlagBits::eSignaled
@@ -810,11 +730,16 @@ void Graphics::CreateSyncObjects()
 			throw std::runtime_error("failed to create in flight fence!");
 	}
 
-	m_renderFinishedSemaphores = std::vector<vk::Semaphore>(m_swapChainImages.size(), VK_NULL_HANDLE);
+	m_mainRenderFinishedSemaphores = std::vector<vk::Semaphore>(m_swapChainImageCount, nullptr);
+	m_imguiRenderFinishedSemaphores = std::vector<vk::Semaphore>(m_swapChainImageCount, nullptr);
 
-	for (auto i = 0; i < m_swapChainImages.size(); i++)
-		if (m_logicalDevice.createSemaphore(&semaphoreInfo, nullptr, &m_renderFinishedSemaphores[i]) != vk::Result::eSuccess)
+	for (uint32_t i = 0; i < m_swapChainImageCount; i++)
+	{
+		if (m_logicalDevice.createSemaphore(&semaphoreInfo, nullptr, &m_mainRenderFinishedSemaphores[i]) != vk::Result::eSuccess)
 			throw std::runtime_error("failed to create render finished semaphore for swap chain image!");
+		if (m_logicalDevice.createSemaphore(&semaphoreInfo, nullptr, &m_imguiRenderFinishedSemaphores[i]) != vk::Result::eSuccess)
+			throw std::runtime_error("failed to create render finished semaphore for swap chain image!");
+	}
 
 	LOG_SUCCESS("Synchronization objects created successfully!");
 }
@@ -851,7 +776,6 @@ void Graphics::CleanupSwapChain()
 	m_logicalDevice.destroyImageView(m_MSAAImageView, nullptr);
 	m_logicalDevice.destroyImage(m_MSAAImage, nullptr);
 	m_logicalDevice.freeMemory(m_MSAAImageMemory, nullptr);
-
 
 	m_logicalDevice.destroyImageView(m_depthImageView, nullptr);
 	m_logicalDevice.destroyImage(m_depthImage, nullptr);
@@ -1013,15 +937,15 @@ void Graphics::CreateDynamicUniformBuffers()
 	vk::DeviceSize bufferSize = m_alignedUBOSize * objectCount;
 
 	m_dynamicUniformBuffers = std::vector<vk::Buffer>(m_maxFramesInFlight);
-	m_uniformBuffersMemory = std::vector<vk::DeviceMemory>(m_maxFramesInFlight);
-	m_uniformBuffersMapped = std::vector<void*>(m_maxFramesInFlight);
+	m_dynamicUniformBuffersMemory = std::vector<vk::DeviceMemory>(m_maxFramesInFlight);
+	m_dynamicUniformBuffersMapped = std::vector<void*>(m_maxFramesInFlight);
 
 	for (size_t i = 0; i < m_maxFramesInFlight; i++)
 	{
 		m_dynamicUniformBuffers[i] = CreateBuffer(bufferSize, vk::BufferUsageFlagBits::eUniformBuffer,
-			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, m_uniformBuffersMemory[i], true);
+			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, m_dynamicUniformBuffersMemory[i], true);
 
-		if (m_logicalDevice.mapMemory(m_uniformBuffersMemory[i], 0, bufferSize, {}, &m_uniformBuffersMapped[i]) != vk::Result::eSuccess)
+		if (m_logicalDevice.mapMemory(m_dynamicUniformBuffersMemory[i], 0, bufferSize, {}, &m_dynamicUniformBuffersMapped[i]) != vk::Result::eSuccess)
 			throw std::runtime_error("failed to map user memory to uniform buffer!");
 	}
 
@@ -1039,12 +963,12 @@ void Graphics::UpdateUniformBuffer(uint32_t imageIndex)
 	ubo.model = glm::rotate(glm::mat4(1.f), duration * glm::radians(-90.f), glm::vec3(0.f, 0.f, 1.f));
 	ubo.view = glm::lookAt(glm::vec3(2.f, 2.f, 2.f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 0.f, 1.f));
 	ubo.proj = glm::perspective(glm::radians(45.f),
-		static_cast<float>(m_swapChainCapabilities.currentExtent.width) / static_cast<float>(m_swapChainCapabilities.currentExtent.width),
+		static_cast<float>(m_windowSurfaceCapabilities.currentExtent.width) / static_cast<float>(m_windowSurfaceCapabilities.currentExtent.width),
 		0.1f, 10.f);
 
 	ubo.proj[1][1] *= -1;
 
-	memcpy(m_uniformBuffersMapped[imageIndex], &ubo, sizeof(ubo));
+	memcpy(m_dynamicUniformBuffersMapped[imageIndex], &ubo, sizeof(ubo));
 }
 
 void Graphics::CreateDescriptorPool(const uint32_t& numOfTextures)
@@ -1068,7 +992,7 @@ void Graphics::CreateDescriptorPool(const uint32_t& numOfTextures)
 		.pPoolSizes = poolSizes.data(),
 	};
 
-	if (m_logicalDevice.createDescriptorPool(&poolInfo, nullptr, &m_descriptorPool) != vk::Result::eSuccess)
+	if (m_logicalDevice.createDescriptorPool(&poolInfo, nullptr, &m_graphicsDescriptorPool) != vk::Result::eSuccess)
 		throw std::runtime_error("Failed to create descriptor pool!");
 }
 
@@ -1076,7 +1000,7 @@ void Graphics::CreateDescriptorSets(const std::vector<vk::DescriptorImageInfo>& 
 {
 	std::vector<vk::DescriptorSetLayout> dynamicUBODescriptorSetLayouts(m_maxFramesInFlight, m_dynamicUBODescriptorSetLayout);
 	vk::DescriptorSetAllocateInfo uboDescriptorSetAllocInfo {
-		.descriptorPool = m_descriptorPool,
+		.descriptorPool = m_graphicsDescriptorPool,
 		.descriptorSetCount = static_cast<uint32_t>(m_maxFramesInFlight),
 		.pSetLayouts = dynamicUBODescriptorSetLayouts.data()
 	};
@@ -1117,7 +1041,7 @@ void Graphics::CreateDescriptorSets(const std::vector<vk::DescriptorImageInfo>& 
 
 	vk::DescriptorSetAllocateInfo samplerDescriptorSetAllocInfo {
 		.pNext = &varDescCountAllocInfo,
-		.descriptorPool = m_descriptorPool,
+		.descriptorPool = m_graphicsDescriptorPool,
 		.descriptorSetCount = 1,
 		.pSetLayouts = &m_samplerDescriptorSetLayout
 	};
@@ -1233,9 +1157,15 @@ void Graphics::EndSingleTimeCommands(vk::CommandBuffer commandBuffer)
 	LOG_SUCCESS("Successfully freed and ended single time command buffer!");
 }
 
-void Graphics::TransitionImageLayout(vk::Image image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, uint32_t mipLevels)
+void Graphics::TransitionImageLayout(vk::Image image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout,
+	uint32_t mipLevels, const vk::CommandBuffer* inCommandBuffer)
 {
-	vk::CommandBuffer commandBuffer = BeginSingleTimeCommands();
+	vk::CommandBuffer commandBuffer = {};
+
+	if (inCommandBuffer != nullptr)
+		commandBuffer = *inCommandBuffer;
+	else
+		commandBuffer = BeginSingleTimeCommands();
 
 	vk::ImageMemoryBarrier barrier {
 		.srcAccessMask = vk::AccessFlagBits::eNone,
@@ -1267,6 +1197,24 @@ void Graphics::TransitionImageLayout(vk::Image image, vk::Format format, vk::Ima
 		srcStage = vk::PipelineStageFlagBits::eTopOfPipe;
 		dstStage = vk::PipelineStageFlagBits::eTransfer;
 	}
+	else if (oldLayout == vk::ImageLayout::eUndefined &&
+		newLayout == vk::ImageLayout::eShaderReadOnlyOptimal)
+	{
+		barrier.srcAccessMask = vk::AccessFlagBits::eNone;
+		barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
+
+		srcStage = vk::PipelineStageFlagBits::eTopOfPipe;
+		dstStage = vk::PipelineStageFlagBits::eFragmentShader;
+	}
+	else if (oldLayout == vk::ImageLayout::eUndefined &&
+		newLayout == vk::ImageLayout::eGeneral)
+	{
+		barrier.srcAccessMask = vk::AccessFlagBits::eNone;
+		barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
+
+		srcStage = vk::PipelineStageFlagBits::eTransfer;
+		dstStage = vk::PipelineStageFlagBits::eFragmentShader;
+	}
 	else if (oldLayout == vk::ImageLayout::eTransferDstOptimal &&
 		newLayout == vk::ImageLayout::eShaderReadOnlyOptimal)
 	{
@@ -1282,6 +1230,96 @@ void Graphics::TransitionImageLayout(vk::Image image, vk::Format format, vk::Ima
 		barrier.dstAccessMask = vk::AccessFlagBits::eDepthStencilAttachmentRead | vk::AccessFlagBits::eDepthStencilAttachmentWrite;
 		srcStage = vk::PipelineStageFlagBits::eTopOfPipe;
 		dstStage = vk::PipelineStageFlagBits::eEarlyFragmentTests;
+	}
+	else if (oldLayout == vk::ImageLayout::eUndefined &&
+		newLayout == vk::ImageLayout::eDepthStencilAttachmentOptimal)
+	{
+		barrier.srcAccessMask = vk::AccessFlagBits::eNone;
+		barrier.dstAccessMask = vk::AccessFlagBits::eDepthStencilAttachmentRead | vk::AccessFlagBits::eDepthStencilAttachmentWrite;
+
+		srcStage = vk::PipelineStageFlagBits::eTopOfPipe;
+		dstStage = vk::PipelineStageFlagBits::eEarlyFragmentTests;
+	}
+	else if (oldLayout == vk::ImageLayout::eUndefined &&
+		newLayout == vk::ImageLayout::eColorAttachmentOptimal)
+	{
+		barrier.srcAccessMask = vk::AccessFlagBits::eNone;
+		barrier.dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite;
+
+		srcStage = vk::PipelineStageFlagBits::eTopOfPipe;
+		dstStage = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+	}
+	else if (oldLayout == vk::ImageLayout::eShaderReadOnlyOptimal &&
+		newLayout == vk::ImageLayout::eTransferDstOptimal)
+	{
+		barrier.srcAccessMask = vk::AccessFlagBits::eShaderRead;
+		barrier.dstAccessMask = vk::AccessFlagBits::eTransferWrite;
+
+		srcStage = vk::PipelineStageFlagBits::eFragmentShader;
+		dstStage = vk::PipelineStageFlagBits::eTransfer;
+	}
+	else if (oldLayout == vk::ImageLayout::eTransferDstOptimal &&
+		newLayout == vk::ImageLayout::eShaderReadOnlyOptimal)
+	{
+		barrier.srcAccessMask = vk::AccessFlagBits::eTransferWrite;
+		barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
+
+		srcStage = vk::PipelineStageFlagBits::eTransfer;
+		dstStage = vk::PipelineStageFlagBits::eFragmentShader;
+	}
+	else if (oldLayout == vk::ImageLayout::eShaderReadOnlyOptimal &&
+		newLayout == vk::ImageLayout::eShaderReadOnlyOptimal)
+	{
+		barrier.srcAccessMask = vk::AccessFlagBits::eNone;
+		barrier.dstAccessMask = vk::AccessFlagBits::eNone;
+
+		srcStage = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+		dstStage = vk::PipelineStageFlagBits::eFragmentShader;
+	}
+	else if (oldLayout == vk::ImageLayout::eShaderReadOnlyOptimal &&
+		newLayout == vk::ImageLayout::eColorAttachmentOptimal)
+	{
+		barrier.srcAccessMask = vk::AccessFlagBits::eShaderRead;
+		barrier.dstAccessMask = vk::AccessFlagBits::eColorAttachmentWrite;
+
+		srcStage = vk::PipelineStageFlagBits::eFragmentShader;
+		dstStage = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+	}
+	else if (oldLayout == vk::ImageLayout::eColorAttachmentOptimal &&
+		newLayout == vk::ImageLayout::eShaderReadOnlyOptimal)
+	{
+		barrier.srcAccessMask = vk::AccessFlagBits::eColorAttachmentWrite;
+		barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
+
+		srcStage = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+		dstStage = vk::PipelineStageFlagBits::eFragmentShader;
+	}
+	else if (oldLayout == vk::ImageLayout::eShaderReadOnlyOptimal &&
+		newLayout == vk::ImageLayout::eDepthStencilAttachmentOptimal)
+	{
+		barrier.srcAccessMask = vk::AccessFlagBits::eShaderRead;
+		barrier.dstAccessMask = vk::AccessFlagBits::eDepthStencilAttachmentWrite;
+
+		srcStage = vk::PipelineStageFlagBits::eFragmentShader;
+		dstStage = vk::PipelineStageFlagBits::eLateFragmentTests;
+	}
+	else if (oldLayout == vk::ImageLayout::eDepthStencilAttachmentOptimal &&
+		newLayout == vk::ImageLayout::eShaderReadOnlyOptimal)
+	{
+			barrier.srcAccessMask = vk::AccessFlagBits::eDepthStencilAttachmentWrite;
+			barrier.dstAccessMask = vk::AccessFlagBits::eShaderRead;
+
+			srcStage = vk::PipelineStageFlagBits::eLateFragmentTests;
+			dstStage = vk::PipelineStageFlagBits::eFragmentShader;
+	}
+	else if (oldLayout == vk::ImageLayout::eColorAttachmentOptimal &&
+		newLayout == vk::ImageLayout::ePresentSrcKHR)
+	{
+			barrier.srcAccessMask = vk::AccessFlagBits::eColorAttachmentWrite;
+			barrier.dstAccessMask = vk::AccessFlagBits::eNone;
+
+			srcStage = vk::PipelineStageFlagBits::eColorAttachmentOutput;
+			dstStage = vk::PipelineStageFlagBits::eNone;
 	}
 	else
 		throw std::runtime_error("Unsupported layout transition!");
@@ -1433,6 +1471,36 @@ void Graphics::GenerateMipmaps(const vk::Image& image, const int32_t& width, con
 	EndSingleTimeCommands(commandBuffer);
 }
 
+std::vector<vk::CommandBuffer> Graphics::CreateCommandBuffers(const uint32_t& count)
+{
+	LOG_INFO("Creating command buffer...");
+
+	std::vector<vk::CommandBuffer> commandBuffers(count);
+
+	vk::CommandBufferAllocateInfo allocateInfo = {
+		.commandPool = m_commandPoolDraw,
+		.level = vk::CommandBufferLevel::ePrimary,
+		.commandBufferCount = count
+	};
+
+	if (m_logicalDevice.allocateCommandBuffers(&allocateInfo, commandBuffers.data()) != vk::Result::eSuccess)
+		throw std::runtime_error("Failed to allocate command buffers!");
+
+	LOG_SUCCESS("Created command buffer successfully!");
+	return commandBuffers;
+}
+
+void Graphics::BeginCommandBuffer(vk::CommandBuffer& commandBuffer, vk::CommandBufferUsageFlags usageFlags)
+{
+	vk::CommandBufferBeginInfo beginInfo = {
+		.flags = usageFlags,
+		.pInheritanceInfo = nullptr
+	};
+
+	if (commandBuffer.begin(&beginInfo) != vk::Result::eSuccess)
+		throw std::runtime_error("Failed to begin command buffer!");
+}
+
 void Graphics::CreateDepthResources()
 {
 	m_depthImage = CreateImage(m_swapChainInfo.imageExtent.width, m_swapChainInfo.imageExtent.height, 1, m_MSAALevel,
@@ -1446,7 +1514,7 @@ void Graphics::CreateDepthResources()
 
 void Graphics::CreateMSAAResources()
 {
-	m_MSAAImage = CreateImage(m_swapChainCapabilities.currentExtent.width, m_swapChainCapabilities.currentExtent.height, 1,
+	m_MSAAImage = CreateImage(m_windowSurfaceCapabilities.currentExtent.width, m_windowSurfaceCapabilities.currentExtent.height, 1,
 		m_MSAALevel, m_swapChainInfo.imageFormat, vk::ImageTiling::eOptimal,
 		vk::ImageUsageFlagBits::eTransientAttachment | vk::ImageUsageFlagBits::eColorAttachment,
 		vk::MemoryPropertyFlagBits::eDeviceLocal, m_MSAAImageMemory);
@@ -1698,7 +1766,7 @@ bool Graphics::IsDeviceSuitable(const vk::PhysicalDevice& device)
 	}
 
 	// Get device swapchain surface capabilities for swap extent (resolution) and image count
-	if (device.getSurfaceCapabilitiesKHR(m_windowSurface, &m_swapChainCapabilities) != vk::Result::eSuccess)
+	if (device.getSurfaceCapabilitiesKHR(m_windowSurface, &m_windowSurfaceCapabilities) != vk::Result::eSuccess)
 		throw std::runtime_error("getSurfaceCapabilitiesKHR failed!");
 
 	// Get device's memory properties
@@ -1740,10 +1808,13 @@ bool Graphics::IsDeviceSuitable(const vk::PhysicalDevice& device)
 void Graphics::InitializeWindow()
 {
 	LOG_INFO("Initializing GLFW window...");
+	glfwSetErrorCallback(GLFWErrorCallback);
 
 	LOG_INFO("Initializing GLFW...");
 	if (!glfwInit())
 		throw std::runtime_error("Failed to initialize GLFW");
+	if (!glfwVulkanSupported())
+		throw std::runtime_error("GLFW: Vulkan not supported!");
 
 	LOG_SUCCESS("GLFW initialized successfully");
 
@@ -1794,7 +1865,7 @@ void Graphics::CleanupVulkan()
 	for (const auto& memory : m_manageMemories)
 		m_logicalDevice.freeMemory(memory, nullptr);
 
-	m_logicalDevice.destroyDescriptorPool(m_descriptorPool, nullptr);
+	m_logicalDevice.destroyDescriptorPool(m_graphicsDescriptorPool, nullptr);
 
 	m_logicalDevice.destroyDescriptorSetLayout(m_dynamicUBODescriptorSetLayout, nullptr);
 	m_logicalDevice.destroyDescriptorSetLayout(m_samplerDescriptorSetLayout, nullptr);
@@ -1804,8 +1875,11 @@ void Graphics::CleanupVulkan()
 	
 	m_logicalDevice.destroyRenderPass(m_renderPass, nullptr);
 	
-	for (auto i = 0; i < m_renderFinishedSemaphores.size(); i++)
-		m_logicalDevice.destroySemaphore(m_renderFinishedSemaphores[i], nullptr);
+	for (auto i = 0; i < m_mainRenderFinishedSemaphores.size(); i++)
+	{
+		m_logicalDevice.destroySemaphore(m_mainRenderFinishedSemaphores[i], nullptr);
+		m_logicalDevice.destroySemaphore(m_imguiRenderFinishedSemaphores[i], nullptr);
+	}
 
 	for (auto i = 0; i < m_maxFramesInFlight; i++)
 	{
@@ -1870,7 +1944,7 @@ bool Graphics::IsDebugSupported()
 	return false;
 }
 
-VKAPI_ATTR vk::Bool32 VKAPI_CALL Graphics::DebugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT messageSeverity, vk::DebugUtilsMessageTypeFlagsEXT messageType, const vk::DebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData)
+VKAPI_ATTR vk::Bool32 VKAPI_CALL Graphics::VulkanDebugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT messageSeverity, vk::DebugUtilsMessageTypeFlagsEXT messageType, const vk::DebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData)
 {
 	switch (messageSeverity)
 	{
@@ -1892,4 +1966,11 @@ VKAPI_ATTR vk::Bool32 VKAPI_CALL Graphics::DebugCallback(vk::DebugUtilsMessageSe
 	}
 	
 	return VK_FALSE;
+}
+
+void Graphics::GLFWErrorCallback(int error, const char* description)
+{
+	LOG_FATAL("GLFW Error!");
+	LOG_FATAL(error);
+	LOG_FATAL(description);
 }

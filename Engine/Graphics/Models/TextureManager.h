@@ -1,5 +1,6 @@
 #pragma once
 
+#include "../Graphics.h"
 #include "Texture.h"
 
 #include <memory>
@@ -19,6 +20,8 @@ public:
 	~TextureManager();
 private:
 	static std::shared_ptr<TextureManager>						s_instance;
+
+	std::shared_ptr<Graphics>									m_graphics = nullptr;
 
 	std::vector<pTexture>										m_textures = {};
 };

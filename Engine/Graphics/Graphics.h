@@ -156,8 +156,11 @@ struct UniformBuffer
 
 class Graphics
 {
+	// Singleton
+	static std::shared_ptr<Graphics> s_instance;
 public:
 	friend class Renderer;
+	friend class IMGUIManager;
 	static std::shared_ptr<Graphics> Get();
 
 	void CopyDataToBuffer(void* data, vk::DeviceSize size, vk::Buffer& buffer);
@@ -169,11 +172,14 @@ public:
 		vk::Format imageFormat, vk::ImageTiling imageTiling, vk::ImageUsageFlags imageUsage, vk::MemoryPropertyFlags memoryProperties,
 		vk::DeviceMemory& deviceMemory, bool cleanup = false);
 	vk::ImageView CreateImageView(vk::Image image, vk::Format format, vk::ImageAspectFlags aspectFlags, uint32_t mipLevels, bool cleanup = false);
-	void TransitionImageLayout(vk::Image image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout, uint32_t mipLevels);
+	void TransitionImageLayout(vk::Image image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout,
+		uint32_t mipLevels, const vk::CommandBuffer* inCommandBuffer = nullptr);
 	void CopyDataToImage(void* data, vk::DeviceSize size, vk::Image& image, uint32_t imageWidth, uint32_t imageHeight);
 	void CopyBufferToImage(vk::Buffer buffer, vk::Image image, uint32_t imageWidth, uint32_t imageHeight);
 	vk::Sampler CreateSampler(bool cleanup = false);
 	void GenerateMipmaps(const vk::Image& image, const int32_t& width, const int32_t& height, const uint32_t& mipLevels);
+	std::vector<vk::CommandBuffer> CreateCommandBuffers(const uint32_t& count);
+	void BeginCommandBuffer(vk::CommandBuffer& commandBuffer, vk::CommandBufferUsageFlags usageFlags);
 
 	~Graphics();
 
@@ -182,8 +188,6 @@ public:
 	Graphics operator=(const Graphics& r) = delete;
 private:
 	Graphics();
-
-	void SetupVulkan();
 	// Create GLFW window
 	void InitializeWindow();
 
@@ -199,8 +203,9 @@ private:
 	// Cleanup Vulkan debugger
 	void CleanupDebugger();
 	// Debug messages sent here to be printed to console
-	static VKAPI_ATTR vk::Bool32 VKAPI_CALL DebugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT messageSeverity, vk::DebugUtilsMessageTypeFlagsEXT messageType, const vk::DebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
-	
+	static VKAPI_ATTR vk::Bool32 VKAPI_CALL VulkanDebugCallback(vk::DebugUtilsMessageSeverityFlagBitsEXT messageSeverity, vk::DebugUtilsMessageTypeFlagsEXT messageType, const vk::DebugUtilsMessengerCallbackDataEXT* pCallbackData, void* pUserData);
+	static void GLFWErrorCallback(int error, const char* description);
+
 	// Create a Vulkan surface from our GLFW window
 	void CreateWindowSurface();
 	// Window/framebuffer resizes are sent here
@@ -228,7 +233,7 @@ private:
 
 	// Command buffers
 	void CreateCommandPools();
-	void CreateCommandBuffers();
+	void CreateMainCommandBuffers();
 	vk::CommandBuffer BeginSingleTimeCommands();
 	void EndSingleTimeCommands(vk::CommandBuffer commandBuffer);
 
@@ -247,8 +252,6 @@ private:
 	// Sync
 	void CreateSyncObjects();
 
-	void DrawFrame();
-
 	// Image helper functions
 	bool HasStencilComponent(vk::Format format);
 
@@ -261,9 +264,6 @@ private:
 	friend class Lordi;
 	friend class Renderer;
 	friend class ModelManager;
-
-	// Singleton
-	static std::shared_ptr<Graphics> s_instance;
 	
 	// Parameters
 	std::vector<const char*> m_requiredValidationLayerNames = {
@@ -280,6 +280,7 @@ private:
 	vk::SurfaceKHR m_windowSurface = {};
 
 	// Vulkan instance
+	vk::ApplicationInfo applicationInfo = {};
 	vk::Instance m_vulkanInstance = {};
 	std::vector<vk::ExtensionProperties> m_vulkanExtensionProps = {};
 	std::vector<vk::LayerProperties> m_vulkanLayerProps = {};
@@ -315,11 +316,13 @@ private:
 	vk::SwapchainCreateInfoKHR m_swapChainInfo = {};
 	std::vector<vk::Image> m_swapChainImages = {};
 	std::vector<vk::ImageView> m_swapChainImageViews = {};
-	vk::SurfaceCapabilitiesKHR m_swapChainCapabilities = {};
+	vk::SurfaceCapabilitiesKHR m_windowSurfaceCapabilities = {};
 	std::vector<vk::SurfaceFormatKHR> m_swapChainFormats = {};
 	vk::SurfaceFormatKHR m_swapChainFormat = {};
 	std::vector<vk::PresentModeKHR> m_swapChainPresentModes = {};
-	vk::PresentModeKHR m_requestedPresentMode = vk::PresentModeKHR::eFifo;
+	vk::PresentModeKHR m_swapChainRequestedPresentMode = vk::PresentModeKHR::eFifo;
+	vk::PresentModeKHR m_swapChainPresentMode = vk::PresentModeKHR::eFifo;
+	uint32_t m_swapChainImageCount = 0;
 
 	// Shaders
 	vk::ShaderModule m_shaderModuleVertex = {};
@@ -331,6 +334,7 @@ private:
 	// Pipeline
 	vk::PipelineLayout m_pipelineLayout = {};
 	vk::Pipeline m_pipelineGraphics = {};
+	vk::PipelineCache m_pipelineCache = {};
 
 	// Command pools
 	vk::CommandPool m_commandPoolDraw = {};
@@ -339,7 +343,8 @@ private:
 	// Sync objects
 	const int m_maxFramesInFlight = 2;
 	std::vector<vk::Semaphore> m_imageAvailableSemaphores = {};
-	std::vector<vk::Semaphore> m_renderFinishedSemaphores = {};
+	std::vector<vk::Semaphore> m_mainRenderFinishedSemaphores = {};
+	std::vector<vk::Semaphore> m_imguiRenderFinishedSemaphores = {};
 	std::vector<vk::Fence> m_frameInFlightFences = {};
 	uint32_t m_frameInFlightIndex = 0;
 
@@ -351,12 +356,12 @@ private:
 
 	// Uniform buffers
 	std::vector<vk::Buffer> m_dynamicUniformBuffers = {};
-	std::vector<vk::DeviceMemory> m_uniformBuffersMemory = {};
-	std::vector<void*> m_uniformBuffersMapped = {};
+	std::vector<vk::DeviceMemory> m_dynamicUniformBuffersMemory = {};
+	std::vector<void*> m_dynamicUniformBuffersMapped = {};
 	vk::DeviceSize m_alignedUBOSize;
 
 	// Descriptor sets
-	vk::DescriptorPool m_descriptorPool = {};
+	vk::DescriptorPool m_graphicsDescriptorPool = {};
 	vk::DescriptorSetLayout m_dynamicUBODescriptorSetLayout = {};
 	vk::DescriptorSetLayout m_samplerDescriptorSetLayout = {};
 	std::vector<vk::DescriptorSet> m_dynamicUBODescriptorSets = {};
