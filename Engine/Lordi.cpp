@@ -45,6 +45,7 @@ bool Lordi::InitializeSystems()
 	m_settings = Settings::Get();
 	m_renderer = Renderer::Get();
 	m_imGUIManager = IMGUIManager::Get();
+	m_inputManager = InputManager::Get();
 
 	LOG_SUCCESS("Lordi's systems initialized successfully!");
 	 
@@ -72,7 +73,7 @@ std::shared_ptr<Settings> Lordi::GetSettings() const
 	return Settings::Get();
 }
 
-void Lordi::Initialize()
+void Lordi::Start()
 {
 	LOG_INFO("Starting Lordi...");
 

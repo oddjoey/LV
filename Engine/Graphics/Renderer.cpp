@@ -12,14 +12,14 @@ std::shared_ptr<Renderer> Renderer::Get()
 
 vk::CommandBuffer Renderer::RecordCommandBuffer(const uint32_t& imageIndex)
 {
-	auto mainCommandBuffer = m_graphics->m_commandBuffers[m_graphics->m_frameInFlightIndex];
-	mainCommandBuffer.reset();
+	auto commandBuffer = m_graphics->m_commandBuffers[m_graphics->m_frameInFlightIndex];
+	commandBuffer.reset();
 
 	vk::CommandBufferBeginInfo beginInfo{
 		.flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit,
 		.pInheritanceInfo = nullptr
 	};
-	if (mainCommandBuffer.begin(&beginInfo) != vk::Result::eSuccess)
+	if (commandBuffer.begin(&beginInfo) != vk::Result::eSuccess)
 		throw std::runtime_error("Failed begin on command buffer!");
 
 	vk::ClearValue clearColor = {
@@ -40,9 +40,9 @@ vk::CommandBuffer Renderer::RecordCommandBuffer(const uint32_t& imageIndex)
 		.clearValueCount = static_cast<uint32_t>(clearValues.size()),
 		.pClearValues = clearValues.data()
 	};
-	mainCommandBuffer.beginRenderPass(&rpBeginInfo, vk::SubpassContents::eInline);
+	commandBuffer.beginRenderPass(&rpBeginInfo, vk::SubpassContents::eInline);
 
-	mainCommandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, m_graphics->m_pipelineGraphics);
+	commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, m_graphics->m_pipelineGraphics);
 	vk::Viewport viewport{
 		.x = 0.0f,
 		.y = 0.0f,
@@ -51,12 +51,12 @@ vk::CommandBuffer Renderer::RecordCommandBuffer(const uint32_t& imageIndex)
 		.minDepth = 0.0f,
 		.maxDepth = 1.0f
 	};
-	mainCommandBuffer.setViewport(0, 1, &viewport);
+	commandBuffer.setViewport(0, 1, &viewport);
 	vk::Rect2D scissor{
 		.offset = { 0, 0 },
 		.extent = m_graphics->m_swapChainInfo.imageExtent
 	};
-	mainCommandBuffer.setScissor(0, 1, &scissor);
+	commandBuffer.setScissor(0, 1, &scissor);
 
 	auto camera = m_cameraManager->GetActiveCamera();
 	static UniformBuffer ubo{};
@@ -72,8 +72,8 @@ vk::CommandBuffer Renderer::RecordCommandBuffer(const uint32_t& imageIndex)
 		m_graphics->m_samplerDescriptorSet
 	};
 	vk::DeviceSize descriptorSetBindingOffset = 0;
-	mainCommandBuffer.bindVertexBuffers(0, 1, &m_modelManger->m_vertexBuffer, &descriptorSetBindingOffset);
-	mainCommandBuffer.bindIndexBuffer(m_modelManger->m_indexBuffer, 0, vk::IndexType::eUint32);
+	commandBuffer.bindVertexBuffers(0, 1, &m_modelManger->m_vertexBuffer, &descriptorSetBindingOffset);
+	commandBuffer.bindIndexBuffer(m_modelManger->m_indexBuffer, 0, vk::IndexType::eUint32);
 	for (auto& objectList : m_objectManager->GetObjects())
 	{
 		uint32_t modelIndex = objectList.first;
@@ -93,19 +93,19 @@ vk::CommandBuffer Renderer::RecordCommandBuffer(const uint32_t& imageIndex)
 			uint32_t dynamicOffset = (object->GetIndex() - 1) * static_cast<uint32_t>(m_graphics->m_alignedUBOSize);
 			uint8_t* dst = reinterpret_cast<uint8_t*>(m_graphics->m_dynamicUniformBuffersMapped[m_graphics->m_frameInFlightIndex]) + dynamicOffset;
 			memcpy(dst, &ubo, sizeof(ubo));
-			mainCommandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_graphics->m_pipelineLayout, 0, static_cast<uint32_t>(descriptorSets.size()), descriptorSets.data(), 1, &dynamicOffset);
+			commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_graphics->m_pipelineLayout, 0, static_cast<uint32_t>(descriptorSets.size()), descriptorSets.data(), 1, &dynamicOffset);
 
 			uint32_t textureIndex = object->GetTextureIndex();
-			mainCommandBuffer.pushConstants(m_graphics->m_pipelineLayout, vk::ShaderStageFlagBits::eFragment, 0, sizeof(uint32_t), &textureIndex);
+			commandBuffer.pushConstants(m_graphics->m_pipelineLayout, vk::ShaderStageFlagBits::eFragment, 0, sizeof(uint32_t), &textureIndex);
 
-			mainCommandBuffer.drawIndexed(m_modelManger->m_indicesCounts[modelIndex - 1], 1, m_modelManger->m_indicesOffsets[modelIndex - 1], static_cast<uint32_t>(m_modelManger->m_verticesOffsets[modelIndex - 1]), 0);
+			commandBuffer.drawIndexed(m_modelManger->m_indicesCounts[modelIndex - 1], 1, m_modelManger->m_indicesOffsets[modelIndex - 1], static_cast<uint32_t>(m_modelManger->m_verticesOffsets[modelIndex - 1]), 0);
 		}
 	}
 
-	mainCommandBuffer.endRenderPass();
-	mainCommandBuffer.end();
+	//mainCommandBuffer.endRenderPass();
+	//mainCommandBuffer.end();
 
-	return mainCommandBuffer;
+	return commandBuffer;
 }
 
 void Renderer::RenderFrame()
@@ -129,42 +129,30 @@ void Renderer::RenderFrame()
 	if (m_graphics->m_logicalDevice.resetFences(1, &m_graphics->m_frameInFlightFences[m_graphics->m_frameInFlightIndex]) != vk::Result::eSuccess)
 		throw std::runtime_error("resetFences failed!");
 
-	auto mainCommandBuffer = RecordCommandBuffer(imageIndex);
-
-	m_imguiManager->RenderFrame();
-	auto IMGUICommandBuffer = m_imguiManager->RecordCommandBuffer(imageIndex);
+	auto commandBuffer = RecordCommandBuffer(imageIndex);
+	commandBuffer.nextSubpass(vk::SubpassContents::eInline);
+	if (m_imguiManager->m_showIMGUI)
+		m_imguiManager->RecordCommandBuffer(commandBuffer);
+	commandBuffer.endRenderPass();
+	commandBuffer.end();
 
 	std::vector<vk::PipelineStageFlags> waitStages = { vk::PipelineStageFlagBits::eColorAttachmentOutput };
-	vk::SubmitInfo mainSubmitInfo = {
+	vk::SubmitInfo submitInfo = {
 		.waitSemaphoreCount = 1,
 		.pWaitSemaphores = &m_graphics->m_imageAvailableSemaphores[m_graphics->m_frameInFlightIndex],
 		.pWaitDstStageMask = waitStages.data(),
 		.commandBufferCount = 1,
-		.pCommandBuffers = &mainCommandBuffer,
+		.pCommandBuffers = &commandBuffer,
 		.signalSemaphoreCount = 1,
 		.pSignalSemaphores = &m_graphics->m_mainRenderFinishedSemaphores[imageIndex]
 	}; 
 	
-	if (m_graphics->m_queueGraphics.submit(1, &mainSubmitInfo, nullptr) != vk::Result::eSuccess)
-		throw std::runtime_error("failed to submit draw command buffer!");
-
-	vk::SubmitInfo IMGUISubmitInfo = {
-		.waitSemaphoreCount = 1,
-		.pWaitSemaphores = &m_graphics->m_mainRenderFinishedSemaphores[imageIndex],
-		.pWaitDstStageMask = waitStages.data(),
-		.commandBufferCount = 1,
-		.pCommandBuffers = &IMGUICommandBuffer,
-		.signalSemaphoreCount = 1,
-		.pSignalSemaphores = &m_graphics->m_imguiRenderFinishedSemaphores[imageIndex]
-	};
-
-	if (m_graphics->m_queueGraphics.submit(1, &IMGUISubmitInfo,
-		m_graphics->m_frameInFlightFences[m_graphics->m_frameInFlightIndex]) != vk::Result::eSuccess)
+	if (m_graphics->m_queueGraphics.submit(1, &submitInfo, m_graphics->m_frameInFlightFences[m_graphics->m_frameInFlightIndex]) != vk::Result::eSuccess)
 		throw std::runtime_error("failed to submit draw command buffer!");
 
 	vk::PresentInfoKHR presentInfo = {
 		.waitSemaphoreCount = 1,
-		.pWaitSemaphores = &m_graphics->m_imguiRenderFinishedSemaphores[imageIndex],
+		.pWaitSemaphores = &m_graphics->m_mainRenderFinishedSemaphores[imageIndex],
 		.swapchainCount = 1,
 		.pSwapchains = &m_graphics->m_swapChain,
 		.pImageIndices = &imageIndex,

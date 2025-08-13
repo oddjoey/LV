@@ -343,11 +343,7 @@ void Graphics::CreateRenderPass()
 {
 	LOG_INFO("Creating render pass...");
 
-	vk::AttachmentReference colorAttachmentRef {
-		.attachment = 0,
-		.layout = vk::ImageLayout::eColorAttachmentOptimal
-	};
-	vk::AttachmentDescription colorAttachment {
+	vk::AttachmentDescription colorAttachment = {
 		.flags = {},
 		.format = m_swapChainInfo.imageFormat,
 		.samples = m_MSAALevel,
@@ -356,14 +352,14 @@ void Graphics::CreateRenderPass()
 		.stencilLoadOp = vk::AttachmentLoadOp::eDontCare,
 		.stencilStoreOp = vk::AttachmentStoreOp::eDontCare,
 		.initialLayout = vk::ImageLayout::eUndefined,
-		.finalLayout = vk::ImageLayout::eColorAttachmentOptimal
+		.finalLayout = m_MSAALevel != vk::SampleCountFlagBits::e1 ? vk::ImageLayout::eColorAttachmentOptimal : vk::ImageLayout::ePresentSrcKHR
+	};
+	vk::AttachmentReference colorAttachmentRef = {
+		.attachment = 0,
+		.layout = vk::ImageLayout::eColorAttachmentOptimal
 	};
 
-	vk::AttachmentReference depthAttachmentRef {
-		.attachment = 1,
-		.layout = vk::ImageLayout::eDepthStencilAttachmentOptimal
-	};
-	vk::AttachmentDescription depthAttachment {
+	vk::AttachmentDescription depthAttachment = {
 		.flags = {},
 		.format = m_depthImageFormat,
 		.samples = m_MSAALevel,
@@ -374,12 +370,12 @@ void Graphics::CreateRenderPass()
 		.initialLayout = vk::ImageLayout::eUndefined,
 		.finalLayout = vk::ImageLayout::eDepthStencilAttachmentOptimal
 	};
-
-	vk::AttachmentReference colorAttachmentResolveRef {
-		.attachment = 2,
-		.layout = vk::ImageLayout::eColorAttachmentOptimal
+	vk::AttachmentReference depthAttachmentRef = {
+		.attachment = 1,
+		.layout = vk::ImageLayout::eDepthStencilAttachmentOptimal
 	};
-	vk::AttachmentDescription colorAttachmentResolve {
+
+	vk::AttachmentDescription colorAttachmentResolve = {
 		.flags = {},
 		.format = m_swapChainInfo.imageFormat,
 		.samples = vk::SampleCountFlagBits::e1,
@@ -390,21 +386,44 @@ void Graphics::CreateRenderPass()
 		.initialLayout = vk::ImageLayout::eUndefined,
 		.finalLayout = vk::ImageLayout::ePresentSrcKHR
 	};
+	vk::AttachmentReference colorAttachmentResolveRef = {
+		.attachment = 2,
+		.layout = vk::ImageLayout::eColorAttachmentOptimal
+	};
 
-	std::vector<vk::AttachmentDescription> attachments = { colorAttachment, depthAttachment, colorAttachmentResolve };
+	std::vector<vk::AttachmentDescription> attachments = { colorAttachment, depthAttachment };
+	if (m_MSAALevel != vk::SampleCountFlagBits::e1)
+		attachments.push_back(colorAttachmentResolve);
 
-	vk::SubpassDescription subpass { 
+	vk::SubpassDescription sceneSubpass = {
 		.flags = {},
 		.pipelineBindPoint = vk::PipelineBindPoint::eGraphics,
 		.inputAttachmentCount = 0,
 		.pInputAttachments = nullptr,
 		.colorAttachmentCount = 1,
 		.pColorAttachments = &colorAttachmentRef,
-		.pResolveAttachments = &colorAttachmentResolveRef,
+		.pResolveAttachments = (m_MSAALevel != vk::SampleCountFlagBits::e1 ? 
+			&colorAttachmentResolveRef : nullptr),
 		.pDepthStencilAttachment = &depthAttachmentRef,
 		.preserveAttachmentCount = 0,
 		.pPreserveAttachments = nullptr,
 	};
+
+	vk::SubpassDescription imguiSubpass = {
+		.flags = {},
+		.pipelineBindPoint = vk::PipelineBindPoint::eGraphics,
+		.inputAttachmentCount = 0,
+		.pInputAttachments = nullptr,
+		.colorAttachmentCount = 1,
+		.pColorAttachments = &colorAttachmentRef,
+		.pResolveAttachments = (m_MSAALevel != vk::SampleCountFlagBits::e1 ?
+			&colorAttachmentResolveRef : nullptr),
+		.pDepthStencilAttachment = nullptr,
+		.preserveAttachmentCount = 0,
+		.pPreserveAttachments = nullptr,
+	};
+
+	std::vector<vk::SubpassDescription> subpasses = { sceneSubpass, imguiSubpass };
 
 	vk::SubpassDependency dependency {
 		.srcSubpass = VK_SUBPASS_EXTERNAL,
@@ -419,8 +438,8 @@ void Graphics::CreateRenderPass()
 		.flags = {},
 		.attachmentCount = static_cast<uint32_t>(attachments.size()),
 		.pAttachments = attachments.data(),
-		.subpassCount = 1,
-		.pSubpasses = &subpass,
+		.subpassCount = static_cast<uint32_t>(subpasses.size()),
+		.pSubpasses = subpasses.data(),
 		.dependencyCount = 1,
 		.pDependencies = &dependency
 	};
@@ -642,6 +661,7 @@ void Graphics::CreateGraphicsPipeline()
 		.basePipelineHandle = VK_NULL_HANDLE,
 		.basePipelineIndex = -1
 	};
+
 	if (m_logicalDevice.createGraphicsPipelines(VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_pipelineGraphics) != vk::Result::eSuccess)
 		throw std::runtime_error("failed to create graphics pipeline!");
 
@@ -660,7 +680,11 @@ void Graphics::CreateFrameBuffers()
 
 	for (auto i = 0; i < m_swapChainImageViews.size(); i++)
 	{
-		std::vector<vk::ImageView> attachments { m_MSAAImageView, m_depthImageView, m_swapChainImageViews[i] };
+		std::vector<vk::ImageView> attachments = {};
+		if (m_MSAALevel != vk::SampleCountFlagBits::e1)
+			attachments = { m_MSAAImageView, m_depthImageView, m_swapChainImageViews[i] };
+		else
+			attachments = { m_swapChainImageViews[i], m_depthImageView };
 
 		vk::FramebufferCreateInfo framebufferInfo {
 			.flags = {},

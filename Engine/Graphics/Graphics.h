@@ -264,6 +264,7 @@ private:
 	friend class Lordi;
 	friend class Renderer;
 	friend class ModelManager;
+	friend class InputManager;
 	
 	// Parameters
 	std::vector<const char*> m_requiredValidationLayerNames = {

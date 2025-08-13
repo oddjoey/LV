@@ -10,6 +10,7 @@
 #include "Settings.h"
 #include "Graphics/Renderer.h"
 #include "Objects/ObjectManager.h"
+#include "InputManager.h"
 
 class Lordi
 {
@@ -26,7 +27,7 @@ public:
 	std::shared_ptr<Graphics> GetGraphics() const;
 	std::shared_ptr<Settings> GetSettings() const;
 
-	void Initialize();
+	void Start();
 private:
 	// Initialize engine systems
 	bool InitializeSystems();
@@ -41,5 +42,6 @@ private:
 	std::shared_ptr<ObjectManager>		m_objectManager = nullptr;
 	std::shared_ptr<CameraManager>		m_cameraManager = nullptr;
 	std::shared_ptr<IMGUIManager>		m_imGUIManager = nullptr;
+	std::shared_ptr<InputManager>		m_inputManager = nullptr;
 };
 

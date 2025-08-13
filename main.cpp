@@ -10,12 +10,12 @@ int main()
 	graphicsSettings.uiWindowWidth = 800;
 	graphicsSettings.uiWindowHeight = 600;
 	graphicsSettings.eVSync = VSyncOptions::NONE;
-	graphicsSettings.eColorBlending = ColorBlendingOptions::MIX;
-	graphicsSettings.eMSAA = MSAAOptions::X8;
+	graphicsSettings.eColorBlending = ColorBlendingOptions::NONE;
+	graphicsSettings.eMSAA = MSAAOptions::X1;
 
 	settings->SetGraphicsSettings(graphicsSettings);
 
-	lordi->Initialize();
+	lordi->Start();
 	
 	return 0;
 }
