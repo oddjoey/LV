@@ -2,23 +2,31 @@
 
 #include <glm/glm.hpp>
 #include <glm/gtc/quaternion.hpp>
+#include <glm/gtc/type_ptr.hpp>
 
 class Entity
 {
+	friend class IMGUIManager;
 public:
 	Entity(const glm::vec3& position, const glm::quat& rotation, const glm::vec3& scale);
 	~Entity();
 
-	void SetPosition(const glm::vec3& position);
+	Entity* SetPosition(const glm::vec3& position);
 	glm::vec3 GetPosition() const;
 
-	virtual void SetRotation(const glm::quat& rotation);
+	Entity* SetRotation(const glm::quat& rotation);
 	glm::quat GetRotation() const;
 
-	void SetScale(const glm::vec3 scale);
+	Entity* SetScale(const glm::vec3& scale);
 	glm::vec3 GetScale() const;
-private:
+
+	Entity* SetAngle(const glm::vec3& angle);
+	glm::vec3 GetAngles() const;
+protected:
 	glm::vec3 m_position = {};
 	glm::quat m_rotation = {};
+	glm::vec3 m_angles = {};
 	glm::vec3 m_scale = {};
 };
+
+#define RAW_DATA(data) glm::value_ptr(data)

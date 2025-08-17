@@ -4,6 +4,7 @@
 #include <memory>
 
 #include "Logger.h"
+#include "Utility.h"
 
 enum class VSyncOptions
 {
@@ -83,11 +84,8 @@ struct GraphicsSettings
 class Settings
 {
 	friend class Lordi;
-	static std::shared_ptr<Settings> _instance;
-	Settings();
+	CLASS_SINGLETON_HEADER(Settings)
 public:
-	static std::shared_ptr<Settings> Get();
-
 	~Settings();
 
 	// delete move/copy
@@ -100,5 +98,6 @@ public:
 
 	GraphicsSettings GetGraphicsSettings() const;
 private:
+	Settings();
 	GraphicsSettings m_tSettings = {};
 };

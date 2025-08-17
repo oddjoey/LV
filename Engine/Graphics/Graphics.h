@@ -8,11 +8,6 @@
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
 
-#define GLM_FORCE_RADIANS
-#define GLM_FORCE_DEPTH_ZERO_TO_ONE
-#include <glm/glm.hpp>
-#include <glm/gtc/matrix_transform.hpp>
-
 #define VULKAN_HPP_NO_CONSTRUCTORS
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
 #include <vulkan/vulkan.hpp>
@@ -25,9 +20,9 @@
 #include <array>		// std::array
 #include <chrono>		// std::chrono
 
-#include "../Utility.h"
-#include "../Logger.h"
-#include "../Settings.h"
+#include "../Utility/Utility.h"
+#include "../Utility/Logger.h"
+#include "../Utility/Settings.h"
 #include "Models/Model.h"
 
 // Vulkan Graphics API: rendering
@@ -147,22 +142,12 @@
 	[done!] 17. Cleanup resources when done.
 */
 
-struct UniformBuffer
-{
-	glm::mat4 model;
-	glm::mat4 view;
-	glm::mat4 proj;
-};
-
 class Graphics
 {
-	// Singleton
-	static std::shared_ptr<Graphics> s_instance;
-public:
 	friend class Renderer;
 	friend class IMGUIManager;
-	static std::shared_ptr<Graphics> Get();
-
+	CLASS_SINGLETON_HEADER(Graphics)
+public:
 	void CopyDataToBuffer(void* data, vk::DeviceSize size, vk::Buffer& buffer);
 	vk::Buffer CreateBuffer(vk::DeviceSize bufferSize, vk::BufferUsageFlags bufferUsageFlags, vk::MemoryPropertyFlags memoryPropertyFlags,
 		vk::DeviceMemory& deviceMemory, bool cleanup = false);
@@ -357,8 +342,10 @@ private:
 
 	// Uniform buffers
 	std::vector<vk::Buffer> m_dynamicUniformBuffers = {};
+	vk::DeviceSize m_dynamicUniformBufferSize = {};
 	std::vector<vk::DeviceMemory> m_dynamicUniformBuffersMemory = {};
 	std::vector<void*> m_dynamicUniformBuffersMapped = {};
+	uint32_t m_dynamicUniformBufferObjectCount = 0;
 	vk::DeviceSize m_alignedUBOSize;
 
 	// Descriptor sets

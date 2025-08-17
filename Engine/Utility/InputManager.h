@@ -1,13 +1,13 @@
 #pragma once
 
-#include "Graphics/Graphics.h"
-#include "Graphics/IMGUI/IMGUIManager.h"
+#include "../Graphics/Graphics.h"
+#include "../Graphics/IMGUI/IMGUIManager.h"
+#include "Utility.h"
 
 class InputManager
 {
-	static std::shared_ptr<InputManager> s_instance;
+	CLASS_SINGLETON_HEADER(InputManager)
 public:
-	static std::shared_ptr<InputManager> Get();
 	InputManager();
 	~InputManager();
 	static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);

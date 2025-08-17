@@ -1,13 +1,15 @@
 #include "ModelManager.h"
 
-std::shared_ptr<ModelManager> ModelManager::s_instance = nullptr;
+CLASS_SINGLETON_SOURCE(ModelManager)
 
-std::shared_ptr<ModelManager> ModelManager::Get()
+ModelManager::ModelManager()
 {
-	if (s_instance == nullptr)
-		s_instance = std::shared_ptr<ModelManager>(new ModelManager());
 
-	return s_instance;
+}
+
+ModelManager::~ModelManager()
+{
+
 }
 
 void ModelManager::AddModel(const pModel& model)
@@ -74,12 +76,11 @@ uint32_t ModelManager::GetModelCount() const
 	return static_cast<uint32_t>(m_models.size());
 }
 
-ModelManager::ModelManager()
+std::vector<std::string> ModelManager::GetModelNames() const
 {
-
-}
-
-ModelManager::~ModelManager()
-{
-
+	std::vector<std::string> names(m_models.size() + 1);
+	names[0] = "None";
+	for (uint32_t i = 0; i < m_models.size(); i++)
+		names[i + 1] = m_models[i]->m_name;
+	return names;
 }

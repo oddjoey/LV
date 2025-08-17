@@ -6,19 +6,18 @@
 
 class ModelManager
 {
+	friend class Renderer;
+	CLASS_SINGLETON_HEADER(ModelManager)
 public:
-	static std::shared_ptr<ModelManager> Get();
+	ModelManager();
+	~ModelManager();
 	void AddModel(const pModel& model);
 	pModel CreateModel(const Model& modelInfo);
 	void CreateModels();
 	uint32_t GetModelIndex(const std::string& modelName);
 	uint32_t GetModelCount() const;
-	ModelManager();
-	~ModelManager();
+	std::vector<std::string> GetModelNames() const;
 private:
-	friend class Renderer;
-
-	static std::shared_ptr<ModelManager>	s_instance;
 
 	std::vector<pModel>						m_models = {};
 

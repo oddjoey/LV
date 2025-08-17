@@ -1,16 +1,9 @@
 #include "InputManager.h"
 
-std::shared_ptr<InputManager> InputManager::s_instance = nullptr;
+CLASS_SINGLETON_SOURCE(InputManager)
+
 std::shared_ptr<Graphics> InputManager::m_graphics = nullptr;
 std::shared_ptr<IMGUIManager> InputManager::m_imguiManager = nullptr;
-
-std::shared_ptr<InputManager> InputManager::Get()
-{
-	if (s_instance == nullptr)
-		s_instance = std::shared_ptr<InputManager>(new InputManager());
-
-	return s_instance;
-}
 
 InputManager::InputManager()
 {

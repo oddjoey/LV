@@ -5,15 +5,7 @@
 
 VULKAN_HPP_DEFAULT_DISPATCH_LOADER_DYNAMIC_STORAGE
 
-std::shared_ptr<Graphics> Graphics::s_instance = nullptr;
-
-std::shared_ptr<Graphics> Graphics::Get()
-{
-	if (s_instance == nullptr)
-		s_instance = std::shared_ptr<Graphics>(new Graphics());
-
-	return s_instance;
-}
+CLASS_SINGLETON_SOURCE(Graphics)
 
 Graphics::Graphics()
 {
@@ -957,8 +949,8 @@ void Graphics::CreateDynamicUniformBuffers()
 	vk::DeviceSize minAlignment = m_physicalDeviceProps.limits.minUniformBufferOffsetAlignment - 1;
 	m_alignedUBOSize = (sizeof(UniformBuffer) + minAlignment) & ~minAlignment;
 
-	const uint32_t objectCount = 200;
-	vk::DeviceSize bufferSize = m_alignedUBOSize * objectCount;
+	m_dynamicUniformBufferObjectCount = 200;
+	m_dynamicUniformBufferSize = m_alignedUBOSize * m_dynamicUniformBufferObjectCount;
 
 	m_dynamicUniformBuffers = std::vector<vk::Buffer>(m_maxFramesInFlight);
 	m_dynamicUniformBuffersMemory = std::vector<vk::DeviceMemory>(m_maxFramesInFlight);
@@ -966,10 +958,10 @@ void Graphics::CreateDynamicUniformBuffers()
 
 	for (size_t i = 0; i < m_maxFramesInFlight; i++)
 	{
-		m_dynamicUniformBuffers[i] = CreateBuffer(bufferSize, vk::BufferUsageFlagBits::eUniformBuffer,
+		m_dynamicUniformBuffers[i] = CreateBuffer(m_dynamicUniformBufferSize, vk::BufferUsageFlagBits::eUniformBuffer,
 			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, m_dynamicUniformBuffersMemory[i], true);
 
-		if (m_logicalDevice.mapMemory(m_dynamicUniformBuffersMemory[i], 0, bufferSize, {}, &m_dynamicUniformBuffersMapped[i]) != vk::Result::eSuccess)
+		if (m_logicalDevice.mapMemory(m_dynamicUniformBuffersMemory[i], 0, m_dynamicUniformBufferSize, {}, &m_dynamicUniformBuffersMapped[i]) != vk::Result::eSuccess)
 			throw std::runtime_error("failed to map user memory to uniform buffer!");
 	}
 

@@ -1,14 +1,6 @@
 #include "Lordi.h"
 
-std::shared_ptr<Lordi> Lordi::_instance = nullptr;
-
-std::shared_ptr<Lordi> Lordi::Get()
-{
-	if (_instance == nullptr)
-		_instance = std::shared_ptr<Lordi>(new Lordi());
-
-	return _instance;
-}
+CLASS_SINGLETON_SOURCE(Lordi)
 
 Lordi::Lordi()
 {    
@@ -34,18 +26,22 @@ bool Lordi::InitializeSystems()
 	auto bearModel = m_modelManger->CreateModel({ "Bear", "Engine/Graphics/Resources/BearMacaroon.obj" });
 
 	m_objectManager = ObjectManager::Get();
-	auto sheep = m_objectManager->CreateObject({ { 0.f, 0.f, 0.f }, { 90.f, 90.f, 0.f, 0.f }, { 1.f, 1.f, 1.f }, sheepModel->GetIndex(), sheepTexture->GetIndex() });
-	auto bear = m_objectManager->CreateObject({ { 0.f, -1.f, 0.f }, { 90.f, 90.f, 0.f, 0.f }, { 1.f, 1.f, 1.f }, bearModel->GetIndex(), bearTexture->GetIndex() });
+	auto sheep = m_objectManager->CreateObject({ { 0.f, 0.f, 0.f }, { 0.f, 0.f, 0.f, 0.f }, { 1.f, 1.f, 1.f }, sheepModel->GetIndex(), sheepTexture->GetIndex() });
+	auto bear = m_objectManager->CreateObject({ { 0.f, -1.f, 0.f }, { 0.f, 0.f, 0.f, 0.f }, { 1.f, 1.f, 1.f }, bearModel->GetIndex(), bearTexture->GetIndex() });
 
 	m_cameraManager = CameraManager::Get();
-	auto camera = m_cameraManager->CreateCamera({ { -2.f, -2.f, 2.f }, { 0.f, 0.f, 0.f, 0.f }, { 1.f, 1.f, 1.f }, 45.f, 0.1f, 10.f });
-	camera->LookAt({ 0.f, 0.f, 0.f });
+
+	Camera cameraInfo = {};
+	cameraInfo.SetPosition({ 2.f, 2.f, 3.f })->SetAngle({ 0.f, 0.f, 0.f })->SetScale({ 1.f, 1.f, 1.f });
+	cameraInfo.SetFov(45.f)->SetNearPlane(0.1f)->SetFarPlane(10.f)->LookAt({ 0.f, 0.f, 0.f });
+	auto camera = m_cameraManager->CreateCamera(cameraInfo);
 	m_cameraManager->SetActiveCamera(camera);
 
 	m_settings = Settings::Get();
 	m_renderer = Renderer::Get();
 	m_imGUIManager = IMGUIManager::Get();
 	m_inputManager = InputManager::Get();
+	m_performanceManager = PerformanceManager::Get();
 
 	LOG_SUCCESS("Lordi's systems initialized successfully!");
 	 
@@ -58,6 +54,7 @@ void Lordi::MainLoop()
 	{
 		glfwPollEvents();
 		m_renderer->RenderFrame();
+		m_performanceManager->Tick();
 	}
 
 	vkDeviceWaitIdle(m_graphics->m_logicalDevice);

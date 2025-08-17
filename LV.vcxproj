@@ -181,7 +181,7 @@
     <ClCompile Include="Engine\Objects\Entity.cpp" />
     <ClCompile Include="Engine\Objects\ObjectManager.cpp" />
     <ClCompile Include="Engine\Graphics\Renderer.cpp" />
-    <ClCompile Include="Engine\InputManager.cpp" />
+    <ClCompile Include="Engine\Utility\InputManager.cpp" />
     <ClCompile Include="Libraries\imgui\backends\imgui_impl_glfw.cpp" />
     <ClCompile Include="Libraries\imgui\backends\imgui_impl_vulkan.cpp" />
     <ClCompile Include="Libraries\imgui\imgui.cpp" />
@@ -191,13 +191,14 @@
     <ClCompile Include="Libraries\imgui\imgui_widgets.cpp" />
     <ClCompile Include="Libraries\imgui\misc\cpp\imgui_stdlib.cpp" />
     <ClCompile Include="Engine\Lordi.cpp" />
-    <ClCompile Include="Engine\Settings.cpp" />
-    <ClCompile Include="Engine\Utility.cpp" />
+    <ClCompile Include="Engine\Utility\Settings.cpp" />
+    <ClCompile Include="Engine\Utility\Utility.cpp" />
     <ClCompile Include="Engine\Graphics\IMGUI\IMGUIManager.cpp" />
     <ClCompile Include="main.cpp" />
     <ClCompile Include="Engine\Objects\Object.cpp" />
     <ClCompile Include="Engine\Graphics\Models\Texture.cpp" />
     <ClCompile Include="Engine\Graphics\Models\TextureManager.cpp" />
+    <ClCompile Include="Engine\Utility\PerformanceManager.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Engine\Objects\CameraManager.h" />
@@ -208,7 +209,7 @@
     <ClInclude Include="Engine\Objects\Entity.h" />
     <ClInclude Include="Engine\Graphics\Renderer.h" />
     <ClInclude Include="Engine\Objects\ObjectManager.h" />
-    <ClInclude Include="Engine\InputManager.h" />
+    <ClInclude Include="Engine\Utility\InputManager.h" />
     <ClInclude Include="Libraries\imgui\backends\imgui_impl_glfw.h" />
     <ClInclude Include="Libraries\imgui\backends\imgui_impl_vulkan.h" />
     <ClInclude Include="Libraries\imgui\imconfig.h" />
@@ -220,13 +221,14 @@
     <ClInclude Include="Libraries\imgui\misc\cpp\imgui_stdlib.h" />
     <ClInclude Include="Engine\Lordi.h" />
     <ClInclude Include="Engine\Graphics.h" />
-    <ClInclude Include="Engine\Logger.h" />
-    <ClInclude Include="Engine\Settings.h" />
-    <ClInclude Include="Engine\Utility.h" />
+    <ClInclude Include="Engine\Utility\Logger.h" />
+    <ClInclude Include="Engine\Utility\Settings.h" />
+    <ClInclude Include="Engine\Utility\Utility.h" />
     <ClInclude Include="Engine\Objects\Object.h" />
     <ClInclude Include="Engine\Graphics\Models\Texture.h" />
     <ClInclude Include="Engine\Graphics\Models\TextureManager.h" />
     <ClInclude Include="Engine\Graphics\IMGUI\IMGUIManager.h" />
+    <ClInclude Include="Engine\Utility\PerformanceManager.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Libraries\imgui\misc\debuggers\imgui.natstepfilter" />

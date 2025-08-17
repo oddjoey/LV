@@ -10,15 +10,25 @@ Camera::~Camera()
 {
 }
 
-void Camera::LookAt(const glm::vec3& position)
+Camera* Camera::LookAt(const glm::vec3& position)
 {
-	m_viewMatrix = glm::lookAt(GetPosition(), position, glm::vec3(0.f, 0.f, 1.f));
-	Entity::SetRotation(glm::quat_cast(glm::mat3(glm::inverse(m_viewMatrix))));
+	auto viewMatrix = glm::lookAt(GetPosition(), position, glm::vec3(0.f, 1.f, 0.f));
+	auto rotation = glm::quat_cast(glm::transpose(glm::mat3(viewMatrix)));
+	SetRotation(rotation);
+	return this;
 }
 
-void Camera::SetViewMatrix(const glm::mat4& viewMatrix)
+glm::mat4 Camera::CalculateViewMatrix()
+{
+	glm::vec3 targetDirection = m_position + m_rotation * glm::vec3(0.f, 0.f, -1.f);
+	m_viewMatrix = glm::lookAt(m_position, targetDirection, glm::vec3(0.f, 1.f, 0.f));
+	return m_viewMatrix;
+}
+
+Camera* Camera::SetViewMatrix(const glm::mat4& viewMatrix)
 {
 	m_viewMatrix = viewMatrix;
+	return this;
 }
 
 glm::mat4 Camera::GetViewMatrix() const
@@ -26,21 +36,15 @@ glm::mat4 Camera::GetViewMatrix() const
 	return m_viewMatrix;
 }
 
-void Camera::SetRotation(const glm::quat& rotation)
-{
-	glm::vec3 targetPosition = GetPosition() + rotation * glm::vec3(0.f, -1.f, 0.f);
-	m_viewMatrix = glm::lookAt(GetPosition(), targetPosition, glm::vec3(0.f, 0.f, 1.f));
-	Entity::SetRotation(rotation);
-}
-
 uint32_t Camera::GetIndex() const
 {
 	return m_index;
 }
 
-void Camera::SetFov(const float& fov)
+Camera* Camera::SetFov(const float& fov)
 {
 	m_fov = fov;
+	return this;
 }
 
 float Camera::GetFov() const
@@ -48,9 +52,10 @@ float Camera::GetFov() const
 	return m_fov;
 }
 
-void Camera::SetNearPlane(const float& nearPlane)
+Camera* Camera::SetNearPlane(const float& nearPlane)
 {
 	m_nearPlane = nearPlane;
+	return this;
 }
 
 float Camera::GetNearPlane() const
@@ -58,9 +63,10 @@ float Camera::GetNearPlane() const
 	return m_nearPlane;
 }
 
-void Camera::SetFarPlane(const float& farPlane)
+Camera* Camera::SetFarPlane(const float& farPlane)
 {
 	m_farPlane = farPlane;
+	return this;
 }
 
 float Camera::GetFarPlane() const

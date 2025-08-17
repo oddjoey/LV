@@ -21,10 +21,10 @@
     <ClCompile Include="Engine\Lordi.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\Settings.cpp">
+    <ClCompile Include="Engine\Utility\Settings.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\Utility.cpp">
+    <ClCompile Include="Engine\Utility\Utility.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="Engine\Graphics\Graphics.cpp">
@@ -87,7 +87,10 @@
     <ClCompile Include="Libraries\imgui\misc\cpp\imgui_stdlib.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Engine\InputManager.cpp">
+    <ClCompile Include="Engine\Utility\InputManager.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Engine\Utility\PerformanceManager.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -98,13 +101,13 @@
     <ClInclude Include="Engine\Lordi.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\Logger.h">
+    <ClInclude Include="Engine\Utility\Logger.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\Settings.h">
+    <ClInclude Include="Engine\Utility\Settings.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\Utility.h">
+    <ClInclude Include="Engine\Utility\Utility.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Engine\Graphics\Graphics.h">
@@ -170,7 +173,10 @@
     <ClInclude Include="Libraries\imgui\misc\cpp\imgui_stdlib.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Engine\InputManager.h">
+    <ClInclude Include="Engine\Utility\InputManager.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Engine\Utility\PerformanceManager.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

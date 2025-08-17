@@ -7,11 +7,11 @@ int main()
 
 	GraphicsSettings graphicsSettings {};
 	graphicsSettings.sWindowName = "Lordi Engine";
-	graphicsSettings.uiWindowWidth = 800;
-	graphicsSettings.uiWindowHeight = 600;
+	graphicsSettings.uiWindowWidth = 1920;
+	graphicsSettings.uiWindowHeight = 1080;
 	graphicsSettings.eVSync = VSyncOptions::NONE;
 	graphicsSettings.eColorBlending = ColorBlendingOptions::NONE;
-	graphicsSettings.eMSAA = MSAAOptions::X1;
+	graphicsSettings.eMSAA = MSAAOptions::X8;
 
 	settings->SetGraphicsSettings(graphicsSettings);
 

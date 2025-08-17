@@ -1,13 +1,15 @@
 #include "TextureManager.h"
 
-std::shared_ptr<TextureManager> TextureManager::s_instance = nullptr;
+CLASS_SINGLETON_SOURCE(TextureManager)
 
-std::shared_ptr<TextureManager> TextureManager::Get()
+TextureManager::TextureManager()
 {
-	if (s_instance == nullptr)
-		s_instance = std::shared_ptr<TextureManager>(new TextureManager());
+	m_graphics = Graphics::Get();
+}
 
-	return s_instance;
+TextureManager::~TextureManager()
+{
+
 }
 
 void TextureManager::AddTexture(const pTexture& tex)
@@ -73,12 +75,11 @@ uint32_t TextureManager::GetTextureIndex(const std::string textureName)
 	return 0;
 }
 
-TextureManager::TextureManager()
+std::vector<std::string> TextureManager::GetTextureNames() const
 {
-	m_graphics = Graphics::Get();
-}
-
-TextureManager::~TextureManager()
-{
-
+	std::vector<std::string> names(m_textures.size() + 1);
+	names[0] = "None";
+	for (uint32_t i = 0; i < m_textures.size(); i++)
+		names[i + 1] = m_textures[i]->m_name;
+	return names;
 }

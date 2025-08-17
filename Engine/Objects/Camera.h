@@ -7,26 +7,26 @@
 class Camera : public Entity
 {
 	friend class CameraManager;
+	friend class IMGUIManager;
 public:
-	Camera(const glm::vec3& position = {}, const glm::quat& rotation = {}, const glm::vec3& scale = {}, const float& fov = 0, const float& nearPlane = 0, const float& farPlane = 0);
+	Camera(const glm::vec3& position = {}, const glm::quat& rotation = {}, const glm::vec3& scale = { 1.f, 1.f, 1.f }, const float& fov = 45.f, const float& nearPlane = 0.1f, const float& farPlane = 10.f);
 	~Camera();
 
-	void LookAt(const glm::vec3& position);
+	Camera* LookAt(const glm::vec3& position);
 
-	void SetViewMatrix(const glm::mat4& viewMatrix);
+	glm::mat4 CalculateViewMatrix();
+	Camera* SetViewMatrix(const glm::mat4& viewMatrix);
 	glm::mat4 GetViewMatrix() const;
-
-	void SetRotation(const glm::quat& rotation) override;
 
 	uint32_t GetIndex() const;
 
-	void SetFov(const float& fov);
+	Camera* SetFov(const float& fov);
 	float GetFov() const;
 
-	void SetNearPlane(const float& nearPlane);
+	Camera* SetNearPlane(const float& nearPlane);
 	float GetNearPlane() const;
 
-	void SetFarPlane(const float& farPlane);
+	Camera* SetFarPlane(const float& farPlane);
 	float GetFarPlane() const;
 private:
 	glm::mat4 m_viewMatrix;

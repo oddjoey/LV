@@ -1,12 +1,15 @@
 #include "Settings.h"
 
-std::shared_ptr<Settings> Settings::_instance = nullptr;
+CLASS_SINGLETON_SOURCE(Settings)
 
-std::shared_ptr<Settings> Settings::Get()
+Settings::~Settings()
 {
-	if (_instance == nullptr)
-		_instance = std::shared_ptr<Settings>(new Settings());
-	return _instance;
+
+}
+
+Settings::Settings()
+{
+
 }
 
 bool Settings::ValidateSettings(const GraphicsSettings& settings)
@@ -51,13 +54,4 @@ GraphicsSettings Settings::GetGraphicsSettings() const
 	}
 
 	return m_tSettings;
-}
-
-Settings::~Settings()
-{
-}
-
-Settings::Settings()
-{
-
 }

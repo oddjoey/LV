@@ -4,19 +4,21 @@
 #include <memory>
 
 #include "Object.h"
+#include "../Utility/Utility.h"
 
 class ObjectManager
 {
+	CLASS_SINGLETON_HEADER(ObjectManager)
 public:
-	static std::shared_ptr<ObjectManager> Get();
-	pObject CreateObject(const Object& objInfo);
-	void AddObject(const pObject& obj);
-	void ChangeObjectModel(const pObject& object, const uint32_t newModelIndex);
-	std::unordered_map<uint32_t, std::vector<pObject>> GetObjects() const;
 	ObjectManager();
 	~ObjectManager();
+	pObject CreateObject(const Object& objInfo);
+	void AddObject(const pObject& obj = nullptr);
+	void RemoveObject(const pObject& obj);
+	void ChangeObjectModel(const pObject& object, const uint32_t newModelIndex);
+	std::unordered_map<uint32_t, std::vector<pObject>> GetObjectsByModel() const;
+	std::vector<pObject> GetObjects() const;
 private:
-	static std::shared_ptr<ObjectManager> s_instance;
-	
-	std::unordered_map<uint32_t, std::vector<pObject>> m_objects = {};
+	std::unordered_map<uint32_t, std::vector<pObject>> m_objectsByModel = {};
+	std::vector<pObject> m_objects = {};
 };

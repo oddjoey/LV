@@ -9,17 +9,17 @@
 class TextureManager
 {
 	friend class Renderer;
+	CLASS_SINGLETON_HEADER(TextureManager)
 public:
-	static std::shared_ptr<TextureManager> Get();
+	TextureManager();
+	~TextureManager();
 	void AddTexture(const pTexture& tex);
 	pTexture CreateTexture(const Texture& textureInfo);
 	std::vector<vk::DescriptorImageInfo> CreateTextures();
 	uint32_t GetNumberOfTextures();
 	uint32_t GetTextureIndex(const std::string textureName);
-	TextureManager();
-	~TextureManager();
+	std::vector<std::string> GetTextureNames() const;
 private:
-	static std::shared_ptr<TextureManager>						s_instance;
 
 	std::shared_ptr<Graphics>									m_graphics = nullptr;
 

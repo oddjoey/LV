@@ -9,9 +9,10 @@ Entity::~Entity()
 {
 }
 
-void Entity::SetPosition(const glm::vec3& newPosition)
+Entity* Entity::SetPosition(const glm::vec3& newPosition)
 {
 	m_position = newPosition;
+	return this;
 }
 
 glm::vec3 Entity::GetPosition() const
@@ -19,9 +20,11 @@ glm::vec3 Entity::GetPosition() const
 	return m_position;
 }
 
-void Entity::SetRotation(const glm::quat& newRotation)
+Entity* Entity::SetRotation(const glm::quat& newRotation)
 {
 	m_rotation = newRotation;
+	m_angles = glm::eulerAngles(newRotation);
+	return this;
 }
 
 glm::quat Entity::GetRotation() const
@@ -29,12 +32,25 @@ glm::quat Entity::GetRotation() const
 	return m_rotation;
 }
 
-void Entity::SetScale(const glm::vec3 scale)
+Entity* Entity::SetScale(const glm::vec3& scale)
 {
 	m_scale = scale;
+	return this;
 }
 
 glm::vec3 Entity::GetScale() const
 {
 	return m_scale;
+}
+
+Entity* Entity::SetAngle(const glm::vec3& angle)
+{
+	m_angles = angle;
+	m_rotation = glm::quat(glm::radians(angle));
+	return this;
+}
+
+glm::vec3 Entity::GetAngles() const
+{
+	return glm::degrees(glm::eulerAngles(m_rotation));
 }
