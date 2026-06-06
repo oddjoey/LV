@@ -413,3 +413,6 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+/Libraries/
+/Libraries/*

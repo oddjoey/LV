@@ -9,8 +9,8 @@
 #include "../../Utility/PerformanceManager.h"
 
 #include <imgui.h>
-#include <imgui_impl_glfw.h>
-#include <imgui_impl_vulkan.h>
+#include <../../../Libraries/imgui/backends/imgui_impl_glfw.h>
+#include <../../../Libraries/imgui/backends/imgui_impl_vulkan.h>
 
 class IMGUIManager
 {

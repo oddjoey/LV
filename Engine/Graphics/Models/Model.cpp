@@ -1,6 +1,7 @@
 #include "Model.h"
 
 #define TINYOBJLOADER_IMPLEMENTATION
+#define TINYOBJLOADER_DISABLE_FAST_FLOAT
 #include <tiny_obj_loader.h>
 
 Model::Model(const std::string& modelName, const std::string& modelPath) : m_name(modelName), m_path(modelPath)
@@ -12,8 +13,9 @@ Model::Model(const std::string& modelName, const std::string& modelPath) : m_nam
 	std::vector<tinyobj::shape_t> shapes;
 	std::vector<tinyobj::material_t> materials;
 	std::string err;
+	std::string warn;
 
-	if (!tinyobj::LoadObj(&at, &shapes, &materials, &err, m_path.c_str()))
+	if (!tinyobj::LoadObj(&at, &shapes, &materials, &err, &warn, m_path.c_str()))
 		throw std::runtime_error(err);
 
 	glm::vec3 minBounds(FLT_MAX);

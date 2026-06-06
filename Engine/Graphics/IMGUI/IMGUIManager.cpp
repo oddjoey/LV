@@ -33,6 +33,14 @@ IMGUIManager::IMGUIManager()
 	if (!ImGui_ImplGlfw_InitForVulkan(m_graphics->m_window, true))
 		throw std::runtime_error("ImGui_ImplGlfw_InitForVulkan failed!");
 
+	ImGui_ImplVulkan_PipelineInfo pipelineInfoMain = {
+		.RenderPass = m_graphics->m_renderPass,
+		.Subpass = 1,
+		.MSAASamples = static_cast<VkSampleCountFlagBits>(m_graphics->m_MSAALevel),
+		.ExtraDynamicStates = {},
+		.PipelineRenderingCreateInfo = {}
+	};
+
 	ImGui_ImplVulkan_InitInfo initInfo = {
 		.ApiVersion = m_graphics->applicationInfo.apiVersion,
 		.Instance = m_graphics->m_vulkanInstance,
@@ -41,18 +49,17 @@ IMGUIManager::IMGUIManager()
 		.QueueFamily = m_graphics->m_physicalDeviceGraphicsIndex,
 		.Queue = m_graphics->m_queueGraphics,
 		.DescriptorPool = m_descriptorPool,
-		.RenderPass = m_graphics->m_renderPass,
+		.DescriptorPoolSize = 0,
 		.MinImageCount = m_graphics->m_windowSurfaceCapabilities.minImageCount,
 		.ImageCount = m_graphics->m_swapChainImageCount,
-		.MSAASamples = static_cast<VkSampleCountFlagBits>(m_graphics->m_MSAALevel),
 		.PipelineCache = 0,
-		.Subpass = 1,
-		.DescriptorPoolSize = 0,
+		.PipelineInfoMain = pipelineInfoMain,
 		.UseDynamicRendering = false,
-		.PipelineRenderingCreateInfo = {},
 		.Allocator = 0,
-		.CheckVkResultFn = CheckVKResult
+		.CheckVkResultFn = CheckVKResult,
+		.MinAllocationSize = 0 // 1024*1024 if using, see struct definition
 	};
+
 	ImGui_ImplVulkan_Init(&initInfo);
 }
 
@@ -64,8 +71,8 @@ IMGUIManager::~IMGUIManager()
 void IMGUIManager::CreateDescriptorPool()
 {
 	std::vector<vk::DescriptorPoolSize> poolSizes = {
-		//{ vk::DescriptorType::eSampler, 1000 },
-		{ vk::DescriptorType::eCombinedImageSampler, IMGUI_IMPL_VULKAN_MINIMUM_IMAGE_SAMPLER_POOL_SIZE }
+		{ vk::DescriptorType::eSampler, IMGUI_IMPL_VULKAN_MINIMUM_SAMPLER_POOL_SIZE },
+		{ vk::DescriptorType::eCombinedImageSampler, IMGUI_IMPL_VULKAN_MINIMUM_SAMPLED_IMAGE_POOL_SIZE }
 		//{ vk::DescriptorType::eSampledImage, 1000 },
 		//{ vk::DescriptorType::eStorageImage, 1000 },
 		//{ vk::DescriptorType::eUniformTexelBuffer, 1000 },
@@ -79,7 +86,7 @@ void IMGUIManager::CreateDescriptorPool()
 	
 	vk::DescriptorPoolCreateInfo poolCreateInfo = {
 		.flags = vk::DescriptorPoolCreateFlagBits::eFreeDescriptorSet,
-		.maxSets = static_cast<uint32_t>(IMGUI_IMPL_VULKAN_MINIMUM_IMAGE_SAMPLER_POOL_SIZE),
+		.maxSets = static_cast<uint32_t>(IMGUI_IMPL_VULKAN_MINIMUM_SAMPLED_IMAGE_POOL_SIZE),
 		.poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
 		.pPoolSizes = poolSizes.data()
 	};

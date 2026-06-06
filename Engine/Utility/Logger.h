@@ -8,7 +8,7 @@
 #include <type_traits>
 
 #include <termcolor.hpp>
-#include <magic_enum/magic_enum.hpp>
+#include <magic_enum.hpp>
 
 class Logger
 {

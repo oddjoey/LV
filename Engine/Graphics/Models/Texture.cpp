@@ -18,11 +18,12 @@ void Texture::SetIndex(const uint32_t& index)
 Texture::Texture(const std::string& name, const std::string& path) : m_name(name), m_path(path)
 {
 	m_pixels = stbi_load(path.c_str(), &m_width, &m_height, &m_stride, STBI_rgb_alpha);
-
-	m_mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(m_width, m_height)))) + 1;
+	m_stride++;
 
 	if (!m_pixels)
 		throw ("Failed to load texture data, wrong path..?");
+
+	m_mipLevels = static_cast<uint32_t>(std::floor(std::log2(std::max(m_width, m_height)))) + 1;
 }
 
 Texture::~Texture()

@@ -18,16 +18,16 @@ bool Lordi::InitializeSystems()
 	m_graphics = Graphics::Get();
 
 	m_textureManager = TextureManager::Get();
-	auto sheepTexture = m_textureManager->CreateTexture({ "Sheep", "Engine/Graphics/Resources/sheep.png" });
-	auto bearTexture = m_textureManager->CreateTexture({ "Bear", "Engine/Graphics/Resources/BearMacaroon.png" });
+	auto ak47Texture = m_textureManager->CreateTexture({ "AK47", "Engine/Graphics/Resources/ak47.jpg" });
+	//auto bearTexture = m_textureManager->CreateTexture({ "Bear", "Engine/Graphics/Resources/BearMacaroon.png" });
 
 	m_modelManger = ModelManager::Get();
-	auto sheepModel = m_modelManger->CreateModel({ "Sheep", "Engine/Graphics/Resources/sheep.obj" });
-	auto bearModel = m_modelManger->CreateModel({ "Bear", "Engine/Graphics/Resources/BearMacaroon.obj" });
+	auto ak47Model = m_modelManger->CreateModel({ "AK47", "Engine/Graphics/Resources/ak47.obj" });
+	//auto bearModel = m_modelManger->CreateModel({ "Bear", "Engine/Graphics/Resources/BearMacaroon.obj" });
 
 	m_objectManager = ObjectManager::Get();
-	auto sheep = m_objectManager->CreateObject({ { 0.f, 0.f, 0.f }, { 0.f, 0.f, 0.f, 0.f }, { 1.f, 1.f, 1.f }, sheepModel->GetIndex(), sheepTexture->GetIndex() });
-	auto bear = m_objectManager->CreateObject({ { 0.f, -1.f, 0.f }, { 0.f, 0.f, 0.f, 0.f }, { 1.f, 1.f, 1.f }, bearModel->GetIndex(), bearTexture->GetIndex() });
+	auto ak47 = m_objectManager->CreateObject({ { 0.f, 0.f, 0.f }, { 0.f, 0.f, 0.f, 0.f }, { 1.f, 1.f, 1.f }, ak47Model->GetIndex(), ak47Texture->GetIndex() });
+	//auto bear = m_objectManager->CreateObject({ { 0.f, -1.f, 0.f }, { 0.f, 0.f, 0.f, 0.f }, { 1.f, 1.f, 1.f }, bearModel->GetIndex(), bearTexture->GetIndex() });
 
 	m_cameraManager = CameraManager::Get();
 
