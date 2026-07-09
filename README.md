@@ -33,28 +33,13 @@ Before building, make sure you have the following dependencies installed:
 
 ---
 
-## 🔧 Building
+## 🔧 Installing
 
 1. Clone the repository and initialize submodules:
    ```bash
-   git clone https://github.com/yourusername/vulkan-game-engine.git
-   cd vulkan-game-engine
+   git clone https://github.com/oddjoey/LV.git
+   cd LV
    git submodule update --init --recursive
-   ```
-
-2. Generate build files (CMake recommended):
-   ```bash
-   cmake -S . -B build
-   ```
-
-3. Build the engine:
-   ```bash
-   cmake --build build
-   ```
-
-4. Run the executable:
-   ```bash
-   ./build/engine
    ```
 
 ---
