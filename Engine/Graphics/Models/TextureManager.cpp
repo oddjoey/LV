@@ -32,7 +32,8 @@ std::vector<vk::DescriptorImageInfo> TextureManager::CreateTextures()
 	std::vector<vk::DescriptorImageInfo> textureDescriptors(m_textures.size());
 	for (auto& texture : m_textures)
 	{
-		auto textureSize = static_cast<vk::DeviceSize>(texture->m_width * texture->m_height * texture->m_stride);
+		// stide has a chance of being > 4 which causes errors, for now just set to 4..
+		auto textureSize = static_cast<vk::DeviceSize>(texture->m_width * texture->m_height * /*texture->m_stride*/ 4);
 
 		vk::DeviceMemory imageMemory;
 		texture->m_image = m_graphics->CreateImage(texture->m_width, texture->m_height, texture->m_mipLevels, vk::SampleCountFlagBits::e1,

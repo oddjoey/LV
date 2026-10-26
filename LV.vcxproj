@@ -82,8 +82,8 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>D:\Projects\Git Repos\LV\Libraries\vulkan\Include;D:\Projects\Git Repos\LV\Libraries\glfw-3.4\include\GLFW;D:\Projects\Git Repos\LV\Libraries\imgui;D:\Projects\Git Repos\LV\Libraries\glm;D:\Projects\Git Repos\LV\Libraries\magic_enum\include\magic_enum;D:\Projects\Git Repos\LV\Libraries\stb;D:\Projects\Git Repos\LV\Libraries\termcolor\include\termcolor;D:\Projects\Git Repos\LV\Libraries\tinyobjloader;D:\Projects\Git Repos\LV\Libraries\ufbx;$(IncludePath)</IncludePath>
-    <LibraryPath>D:\Programming\Libraries\glfw\build\src\Debug;$(LibraryPath)</LibraryPath>
+    <IncludePath>$(ProjectDir)Libraries\vulkan\Include;$(ProjectDir)Libraries\glfw-3.4\include;$(ProjectDir)Libraries\imgui;$(ProjectDir)Libraries\glm;$(ProjectDir)Libraries\magic_enum\include\magic_enum;$(ProjectDir)Libraries\stb;$(ProjectDir)Libraries\termcolor\include\termcolor;$(ProjectDir)Libraries\tinyobjloader;$(ProjectDir)Libraries\ufbx;$(IncludePath)</IncludePath>
+    <LibraryPath>$(LibraryPath)</LibraryPath>
     <SourcePath>$(SourcePath)</SourcePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -148,7 +148,7 @@
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
       <AdditionalDependencies>vulkan-1.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>D:\Programming\Libraries\Vulkan-SDK\Lib;D:\Programming\Libraries\glfw-3.3.9.bin.WIN64\lib-vc2022</AdditionalLibraryDirectories>
+      <AdditionalLibraryDirectories>$(ProjectDir)Libraries\vulkan\Lib;D:\Projects\Git Repos\LV\Libraries\glfw-3.4\lib-vc2026</AdditionalLibraryDirectories>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
