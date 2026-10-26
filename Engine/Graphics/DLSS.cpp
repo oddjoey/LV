@@ -33,9 +33,10 @@ namespace
 			std::filesystem::create_directories(dataFolder, error);
 			built.dataPath = dataFolder.wstring();
 
-			// nvngx_dlss.dll is copied next to the executable when it's built; running from the
-			// project folder it can also come straight from the SDK.
-			built.dllFolders.push_back((std::filesystem::current_path(error) / "Libraries" / "DLSS" / "lib" / "Windows_x86_64" / "rel").wstring());
+			// nvngx_dlss.dll is copied next to the executable when it's built; it can also come
+			// straight from the SDK in Lordi's Libraries folder.
+			auto engineRoot = std::filesystem::current_path(error) / Settings::Get()->GetGraphicsSettings().sEngineRoot;
+			built.dllFolders.push_back((engineRoot / "Libraries" / "DLSS" / "lib" / "Windows_x86_64" / "rel").lexically_normal().wstring());
 			for (const auto& folder : built.dllFolders)
 				built.dllFolderPointers.push_back(folder.c_str());
 			built.commonInfo.PathListInfo.Path = built.dllFolderPointers.data();

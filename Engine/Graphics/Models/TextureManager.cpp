@@ -44,6 +44,11 @@ std::vector<vk::DescriptorImageInfo> TextureManager::CreateTextures()
 {
 	LOG_INFO("Creating textures...");
 
+	// The shaders' texture array can't be empty, so a game without textures gets one plain white
+	// pixel. Nothing refers to it: objects without a texture use index 0.
+	if (m_textures.empty())
+		CreateTexture("Lordi Placeholder", 1, 1, { 255, 255, 255, 255 });
+
 	std::vector<vk::DescriptorImageInfo> textureDescriptors(m_textures.size());
 	for (auto& texture : m_textures)
 	{

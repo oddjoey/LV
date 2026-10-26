@@ -520,7 +520,8 @@ void Graphics::CreateGraphicsPipeline()
 
 vk::ShaderModule Graphics::LoadShaderModule(const char* path)
 {
-	auto shaderCode = Utility::ReadFile(path);
+	// Relative to Lordi's folder, which a game with Lordi as a submodule sets in its settings.
+	auto shaderCode = Utility::ReadFile(Settings::Get()->GetGraphicsSettings().sEngineRoot + path);
 	vk::ShaderModuleCreateInfo shaderInfo {
 		.flags = {},
 		.codeSize = shaderCode.size(),

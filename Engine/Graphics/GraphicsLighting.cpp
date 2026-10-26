@@ -164,14 +164,7 @@ void Graphics::CreateShadowRenderPass()
 
 void Graphics::CreateShadowPipeline()
 {
-	auto shaderCode = Utility::ReadFile("Engine/Graphics/Shaders/Compiled/shadow.spv");
-	vk::ShaderModuleCreateInfo shaderInfo {
-		.codeSize = shaderCode.size(),
-		.pCode = reinterpret_cast<const uint32_t*>(shaderCode.data())
-	};
-	vk::ShaderModule shaderModule = {};
-	if (m_logicalDevice.createShaderModule(&shaderInfo, nullptr, &shaderModule) != vk::Result::eSuccess)
-		throw std::runtime_error("failed to create the shadow shader module!");
+	vk::ShaderModule shaderModule = LoadShaderModule("Engine/Graphics/Shaders/Compiled/shadow.spv");
 
 	// Depth only: no fragment shader.
 	vk::PipelineShaderStageCreateInfo stage {

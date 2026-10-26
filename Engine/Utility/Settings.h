@@ -89,7 +89,8 @@ struct GraphicsSettings
 			uiWindowHeight == other.uiWindowHeight &&
 			eVSync == other.eVSync &&
 			eColorBlending == other.eColorBlending &&
-			eMSAA == other.eMSAA;
+			eMSAA == other.eMSAA &&
+			sEngineRoot == other.sEngineRoot;
 	}
 
 	std::string sWindowName = "";
@@ -98,6 +99,9 @@ struct GraphicsSettings
 	VSyncOptions eVSync = VSyncOptions::NONE;
 	ColorBlendingOptions eColorBlending = ColorBlendingOptions::NONE;
 	MSAAOptions eMSAA = MSAAOptions::X1;
+	// Where Lordi's own files (compiled shaders) are, relative to the working directory, ending in
+	// a slash. Empty when running from Lordi's folder; "LV/" for a game with Lordi as a submodule.
+	std::string sEngineRoot = "";
 };
 
 class Settings
