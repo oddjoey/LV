@@ -15,7 +15,7 @@ TextureManager::~TextureManager()
 void TextureManager::AddTexture(const pTexture& tex)
 {
 	m_textures.push_back(tex);
-	tex->m_index = static_cast<uint8_t>(m_textures.size());
+	tex->m_index = static_cast<uint32_t>(m_textures.size());
 }
 
 pTexture TextureManager::CreateTexture(const Texture& textureInfo)
@@ -23,6 +23,21 @@ pTexture TextureManager::CreateTexture(const Texture& textureInfo)
 	auto texture = std::make_shared<Texture>(textureInfo);
 	AddTexture(texture);
 	return texture;
+}
+
+pTexture TextureManager::CreateTexture(const std::string& name, int width, int height, const std::vector<uint8_t>& pixels)
+{
+	auto texture = std::make_shared<Texture>(name, width, height, pixels);
+	AddTexture(texture);
+	return texture;
+}
+
+pTexture TextureManager::GetTexture(const std::string& textureName) const
+{
+	for (const auto& texture : m_textures)
+		if (texture->m_name == textureName)
+			return texture;
+	return nullptr;
 }
 
 std::vector<vk::DescriptorImageInfo> TextureManager::CreateTextures()
@@ -42,7 +57,7 @@ std::vector<vk::DescriptorImageInfo> TextureManager::CreateTextures()
 			vk::MemoryPropertyFlagBits::eDeviceLocal, imageMemory, true);
 
 		m_graphics->TransitionImageLayout(texture->m_image, texture->m_format, vk::ImageLayout::eUndefined, vk::ImageLayout::eTransferDstOptimal, texture->m_mipLevels);
-		m_graphics->CopyDataToImage(texture->m_pixels, textureSize, texture->m_image, texture->m_width, texture->m_height);
+		m_graphics->CopyDataToImage(const_cast<uint8_t*>(texture->GetPixelData()), textureSize, texture->m_image, texture->m_width, texture->m_height);
 		m_graphics->GenerateMipmaps(texture->m_image, texture->m_width, texture->m_height, texture->m_mipLevels);
 		texture->FreeTexture();
 

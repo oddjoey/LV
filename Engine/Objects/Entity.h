@@ -1,6 +1,7 @@
 #pragma once
 
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtc/quaternion.hpp>
 #include <glm/gtc/type_ptr.hpp>
 
@@ -22,6 +23,9 @@ public:
 
 	Entity* SetAngle(const glm::vec3& angle);
 	glm::vec3 GetAngles() const;
+
+	// Translation * rotation * scale.
+	glm::mat4 GetModelMatrix() const;
 protected:
 	glm::vec3 m_position = {};
 	glm::quat m_rotation = {};

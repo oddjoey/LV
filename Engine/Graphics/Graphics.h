@@ -24,6 +24,7 @@
 #include "../Utility/Logger.h"
 #include "../Utility/Settings.h"
 #include "Models/Model.h"
+#include "DLSS.h"
 
 // Vulkan Graphics API: rendering
 // GLFW: window management & input handling
@@ -166,6 +167,24 @@ public:
 	std::vector<vk::CommandBuffer> CreateCommandBuffers(const uint32_t& count);
 	void BeginCommandBuffer(vk::CommandBuffer& commandBuffer, vk::CommandBufferUsageFlags usageFlags);
 
+	// Video options that can change while running. Both rebuild the swap chain on the next frame.
+	void SetVSync(VSyncOptions vsync);
+	void SetDisplayMode(DisplayMode mode, uint32_t width, uint32_t height);
+	DisplayMode GetDisplayMode() const;
+	// Resolutions the primary monitor supports, smallest first, without duplicates.
+	std::vector<std::pair<uint32_t, uint32_t>> GetDisplayResolutions() const;
+	vk::SampleCountFlagBits GetMaxMSAA() const;
+
+	// DLSS: the scene renders smaller and is upscaled to the window; OFF draws straight to it.
+	// Changing the mode rebuilds the render targets, so only call it when the setting changes.
+	bool IsDLSSAvailable() const;
+	const std::string& GetDLSSStatus() const;
+	void SetDLSSMode(DLSSMode mode);
+	DLSSMode GetDLSSMode() const;
+	bool IsUpscaling() const;
+	// The size the scene is drawn at: the window's, or smaller with DLSS.
+	vk::Extent2D GetRenderExtent() const;
+
 	~Graphics();
 
 	// delete move/copy
@@ -212,6 +231,11 @@ private:
 
 	// Pipeline
 	void CreateGraphicsPipeline();
+	// The solid and glass pipelines for one scene pass. A pass with a second colour attachment
+	// (motion vectors) gets it written by solid objects only.
+	void CreateScenePipelines(vk::RenderPass renderPass, vk::SampleCountFlagBits samples, const char* vertexPath, const char* fragmentPath,
+		uint32_t colorAttachments, vk::Pipeline& opaque, vk::Pipeline& transparent);
+	vk::ShaderModule LoadShaderModule(const char* path);
 
 	// Frame buffers
 	void CreateFrameBuffers();
@@ -245,6 +269,22 @@ private:
 
 	// MSAA
 	void CreateMSAAResources();
+
+	// Scene lighting and sun shadows (GraphicsLighting.cpp)
+	void CreateSceneResources();
+	void CreateShadowRenderPass();
+	void CreateShadowPipeline();
+	void CreateShadowMap(uint32_t resolution);
+	void CleanupShadowMap();
+	void CleanupSceneResources();
+
+	// DLSS upscaling (GraphicsUpscaling.cpp)
+	void CreateUpscaleResources();
+	void CreateUpscaleRenderPass();
+	void CreateCompositePipeline();
+	void CreateUpscaleTargets();
+	void CleanupUpscaleTargets();
+	void CleanupUpscaleResources();
 
 	friend class Lordi;
 	friend class Renderer;
@@ -367,6 +407,66 @@ private:
 	vk::Image m_MSAAImage = {};
 	vk::DeviceMemory m_MSAAImageMemory = {};
 	vk::ImageView m_MSAAImageView = {};
+
+	// Blended pass for see-through objects (glass)
+	vk::Pipeline m_pipelineTransparent = {};
+
+	// Scene lighting: one uniform block per frame in flight, plus the shadow map
+	vk::DescriptorSetLayout m_sceneDescriptorSetLayout = {};
+	std::vector<vk::DescriptorSet> m_sceneDescriptorSets = {};
+	std::vector<vk::Buffer> m_sceneUniformBuffers = {};
+	std::vector<vk::DeviceMemory> m_sceneUniformBuffersMemory = {};
+	std::vector<void*> m_sceneUniformBuffersMapped = {};
+
+	// Sun shadows: one depth layer per cascade
+	vk::RenderPass m_shadowRenderPass = {};
+	vk::PipelineLayout m_shadowPipelineLayout = {};
+	vk::Pipeline m_shadowPipeline = {};
+	vk::Format m_shadowFormat = vk::Format::eD32Sfloat;
+	uint32_t m_shadowResolution = 0;
+	vk::Image m_shadowImage = {};
+	vk::DeviceMemory m_shadowImageMemory = {};
+	vk::ImageView m_shadowArrayView = {};
+	std::vector<vk::ImageView> m_shadowLayerViews = {};
+	std::vector<vk::Framebuffer> m_shadowFramebuffers = {};
+	vk::Sampler m_shadowSampler = {};
+	bool m_depthClampSupported = false;
+
+	// DLSS: the scene renders into the colour, motion and depth targets at the render size, DLSS
+	// upscales into the output and a full-screen pass copies that to the swap chain under the UI.
+	struct UpscaleImage
+	{
+		vk::Image image = {};
+		vk::DeviceMemory memory = {};
+		vk::ImageView view = {};
+	};
+	DLSS m_dlss = {};
+	DLSSMode m_dlssMode = DLSSMode::OFF;
+	bool m_upscaling = false;
+	bool m_upscaleHistoryLost = true;	// new targets: DLSS starts without history
+	vk::Extent2D m_renderExtent = {};
+	const vk::Format m_upscaleColorFormat = vk::Format::eR16G16B16A16Sfloat;
+	const vk::Format m_upscaleMotionFormat = vk::Format::eR16G16Sfloat;
+	const vk::Format m_upscaleDepthFormat = vk::Format::eD32Sfloat;
+	vk::RenderPass m_upscaleRenderPass = {};
+	vk::Pipeline m_upscalePipeline = {};
+	vk::Pipeline m_upscaleTransparentPipeline = {};
+	UpscaleImage m_upscaleColor = {};
+	UpscaleImage m_upscaleMotion = {};
+	UpscaleImage m_upscaleDepth = {};
+	UpscaleImage m_upscaleOutput = {};
+	vk::Framebuffer m_upscaleFramebuffer = {};
+	vk::DescriptorSetLayout m_compositeSetLayout = {};
+	vk::DescriptorPool m_compositeDescriptorPool = {};
+	vk::DescriptorSet m_compositeDescriptorSet = {};
+	vk::Sampler m_compositeSampler = {};
+	vk::PipelineLayout m_compositePipelineLayout = {};
+	vk::Pipeline m_compositePipeline = {};
+
+	// Display mode, and where the window was before going fullscreen
+	DisplayMode m_displayMode = DisplayMode::WINDOWED;
+	int m_windowedX = 100;
+	int m_windowedY = 100;
 
 	// Memory managment
 	std::vector<vk::Buffer>					m_manageBuffers = {};

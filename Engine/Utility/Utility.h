@@ -30,7 +30,20 @@ struct UniformBuffer
 	glm::mat4 model;
 	glm::mat4 view;
 	glm::mat4 proj;
+	glm::mat4 previousModel;	// last frame's, for motion vectors
 };
+
+// Per-draw values for the fragment shader. Layout must match PushData in shader.frag.
+struct ObjectPushConstants
+{
+	glm::vec4 tint;
+	float emissive;
+	uint32_t textureIndex;
+	uint32_t shading;	// ObjectShading
+};
+
+// Objects beyond this many have no uniform buffer slot and are not drawn.
+constexpr uint32_t MAX_OBJECTS = 1024;
 
 namespace Utility
 {

@@ -1,5 +1,7 @@
 #include "Lordi.h"
 
+#include <thread>
+
 CLASS_SINGLETON_SOURCE(Lordi)
 
 Lordi::Lordi()
@@ -18,28 +20,19 @@ bool Lordi::InitializeSystems()
 	m_graphics = Graphics::Get();
 
 	m_textureManager = TextureManager::Get();
-	auto glockTexture = m_textureManager->CreateTexture({ "AK47", "Resources/glock19/normal.jpg" });
-	//auto bearTexture = m_textureManager->CreateTexture({ "Bear", "Engine/Graphics/Resources/BearMacaroon.png" });
-
 	m_modelManger = ModelManager::Get();
-	auto glockModel = m_modelManger->CreateModel({ "AK47", "Resources/glock19/GLOCK 19 F T.obj" });
-	//auto bearModel = m_modelManger->CreateModel({ "Bear", "Engine/Graphics/Resources/BearMacaroon.obj" });
-
 	m_objectManager = ObjectManager::Get();
-	auto glock = m_objectManager->CreateObject({ { 0.f, 0.f, 0.f }, { 0.f, 0.f, 0.f, 0.f }, { 1.f, 1.f, 1.f }, glockModel->GetIndex(), glockTexture->GetIndex() });
-	//auto bear = m_objectManager->CreateObject({ { 0.f, -1.f, 0.f }, { 0.f, 0.f, 0.f, 0.f }, { 1.f, 1.f, 1.f }, bearModel->GetIndex(), bearTexture->GetIndex() });
-
 	m_cameraManager = CameraManager::Get();
 
-	Camera cameraInfo = {};
-	cameraInfo.SetPosition({ 2.f, 2.f, 3.f })->SetAngle({ 0.f, 0.f, 0.f })->SetScale({ 1.f, 1.f, 1.f });
-	cameraInfo.SetFov(45.f)->SetNearPlane(0.1f)->SetFarPlane(10.f)->LookAt({ 0.f, 0.f, 0.f });
-	auto camera = m_cameraManager->CreateCamera(cameraInfo);
-	m_cameraManager->SetActiveCamera(camera);
+	// Assets have to be registered before the renderer uploads them.
+	if (m_game)
+		m_game->OnLoadAssets();
 
 	m_settings = Settings::Get();
 	m_renderer = Renderer::Get();
 	m_imGUIManager = IMGUIManager::Get();
+	if (m_game)
+		m_imGUIManager->SetGUICallback([game = m_game] { game->OnGUI(); });
 	m_inputManager = InputManager::Get();
 	m_performanceManager = PerformanceManager::Get();
 
@@ -50,11 +43,23 @@ bool Lordi::InitializeSystems()
 
 void Lordi::MainLoop()
 {
+	auto lastFrameTime = std::chrono::steady_clock::now();
 	while (!glfwWindowShouldClose(m_graphics->m_window))
 	{
 		glfwPollEvents();
+		m_inputManager->Update();
+
+		auto frameTime = std::chrono::steady_clock::now();
+		float deltaTime = std::chrono::duration<float>(frameTime - lastFrameTime).count();
+		lastFrameTime = frameTime;
+		if (m_game)
+			m_game->OnUpdate(deltaTime);
+
 		m_renderer->RenderFrame();
 		m_performanceManager->Tick();
+
+		if (m_frameLimit > 0)
+			std::this_thread::sleep_until(frameTime + std::chrono::microseconds(1000000 / m_frameLimit));
 	}
 
 	vkDeviceWaitIdle(m_graphics->m_logicalDevice);
@@ -68,6 +73,22 @@ std::shared_ptr<Graphics> Lordi::GetGraphics() const
 std::shared_ptr<Settings> Lordi::GetSettings() const
 {
 	return Settings::Get();
+}
+
+void Lordi::SetGame(const std::shared_ptr<Game>& game)
+{
+	m_game = game;
+}
+
+void Lordi::SetFrameLimit(int framesPerSecond)
+{
+	m_frameLimit = (std::max)(framesPerSecond, 0);
+}
+
+void Lordi::RequestQuit()
+{
+	if (m_graphics)
+		glfwSetWindowShouldClose(m_graphics->m_window, GLFW_TRUE);
 }
 
 void Lordi::Start()
@@ -85,7 +106,13 @@ void Lordi::Start()
 		if (!InitializeSystems())
 			throw std::runtime_error("Failed to start Lordi.");
 
+		if (m_game)
+			m_game->OnStart();
+
 		MainLoop();
+
+		if (m_game)
+			m_game->OnShutdown();
 
 		m_imGUIManager->Cleanup();
 		m_graphics->CleanupVulkan();

@@ -12,6 +12,7 @@
 #include "Objects/ObjectManager.h"
 #include "Utility/InputManager.h"
 #include "Utility/PerformanceManager.h"
+#include "Game.h"
 
 class Lordi
 {
@@ -24,6 +25,15 @@ public:
 
 	std::shared_ptr<Graphics> GetGraphics() const;
 	std::shared_ptr<Settings> GetSettings() const;
+
+	// Must be called before Start.
+	void SetGame(const std::shared_ptr<Game>& game);
+
+	// Ends the main loop after the current frame and shuts down normally.
+	void RequestQuit();
+
+	// Caps the frame rate by sleeping out the rest of each frame. 0 = no cap.
+	void SetFrameLimit(int framesPerSecond);
 
 	void Start();
 private:
@@ -43,5 +53,7 @@ private:
 	std::shared_ptr<IMGUIManager>			m_imGUIManager = nullptr;
 	std::shared_ptr<InputManager>			m_inputManager = nullptr;
 	std::shared_ptr<PerformanceManager>		m_performanceManager = nullptr;
+	std::shared_ptr<Game>					m_game = nullptr;
+	int										m_frameLimit = 0;
 };
 

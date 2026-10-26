@@ -27,6 +27,7 @@ Graphics::Graphics()
 
 	PickPhysicalDevice();
 	CreateLogicalDevice();
+	m_dlss.Initialize(m_vulkanInstance, m_physicalDevice, m_logicalDevice);
 
 	CreateSwapChain();
 	CreateImageViews();
@@ -68,6 +69,18 @@ void Graphics::CreateVulkanInstance()
 		throw std::runtime_error("Required GLFW extensions not found!");
 
 	std::vector<const char*> requiredExtensionNames(ppExtensions, ppExtensions + requiredGLFWExtensions);
+
+	// DLSS (NGX) needs a few more, where the driver has them.
+	std::vector<std::string> dlssExtensions = DLSS::InstanceExtensions();
+	for (const auto& name : dlssExtensions)
+	{
+		bool supported = std::any_of(m_vulkanExtensionProps.begin(), m_vulkanExtensionProps.end(),
+			[&](const vk::ExtensionProperties& extension) { return name == extension.extensionName.data(); });
+		bool requested = std::any_of(requiredExtensionNames.begin(), requiredExtensionNames.end(),
+			[&](const char* requestedName) { return name == requestedName; });
+		if (supported && !requested)
+			requiredExtensionNames.push_back(name.c_str());
+	}
 
 #ifdef _DEBUG
 	requiredExtensionNames.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
@@ -167,6 +180,10 @@ void Graphics::CreateLogicalDevice()
 	deviceFeatures.depthBounds = vk::True;
 	deviceFeatures.samplerAnisotropy = vk::True;
 	deviceFeatures.sampleRateShading = vk::True;
+	// DLSS's scene pass blends glass into the colour target but leaves its motion vectors alone.
+	deviceFeatures.independentBlend = m_physicalDeviceFeatures.independentBlend;
+	m_depthClampSupported = m_physicalDeviceFeatures.depthClamp == vk::True;
+	deviceFeatures.depthClamp = m_depthClampSupported ? vk::True : vk::False;
 
 	vk::PhysicalDeviceDescriptorIndexingFeatures descriptorIndexFeatures {
 		.shaderSampledImageArrayNonUniformIndexing = vk::True,
@@ -174,13 +191,38 @@ void Graphics::CreateLogicalDevice()
 		.runtimeDescriptorArray = vk::True
 	};
 
+	// DLSS (NGX) device extensions, where the GPU has them. Without them DLSS just reports itself
+	// unavailable.
+	std::vector<const char*> deviceExtensionNames = m_requiredDeviceExtensionNames;
+	std::vector<std::string> dlssExtensions = DLSS::DeviceExtensions(m_vulkanInstance, m_physicalDevice);
+	bool bufferDeviceAddress = false;
+	for (const auto& name : dlssExtensions)
+	{
+		bool supported = std::any_of(m_physicalDeviceExtensions.begin(), m_physicalDeviceExtensions.end(),
+			[&](const vk::ExtensionProperties& extension) { return name == extension.extensionName.data(); });
+		bool requested = std::any_of(deviceExtensionNames.begin(), deviceExtensionNames.end(),
+			[&](const char* requestedName) { return name == requestedName; });
+		if (supported && !requested)
+		{
+			deviceExtensionNames.push_back(name.c_str());
+			LOG_DEBUG("Enabling device extension for DLSS: " + name);
+		}
+		if (supported && (name == VK_KHR_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME || name == VK_EXT_BUFFER_DEVICE_ADDRESS_EXTENSION_NAME))
+			bufferDeviceAddress = true;
+	}
+	vk::PhysicalDeviceBufferDeviceAddressFeatures bufferDeviceAddressFeatures {
+		.bufferDeviceAddress = vk::True
+	};
+	if (bufferDeviceAddress)
+		descriptorIndexFeatures.pNext = &bufferDeviceAddressFeatures;
+
 	vk::DeviceCreateInfo deviceCreateInfo {
 		.pNext = &descriptorIndexFeatures,
 		.flags = {},
 		.queueCreateInfoCount = static_cast<uint32_t>(deviceQueuesInfo.size()),
 		.pQueueCreateInfos = deviceQueuesInfo.data(),
-		.enabledExtensionCount = static_cast<uint32_t>(m_requiredDeviceExtensionNames.size()),
-		.ppEnabledExtensionNames = m_requiredDeviceExtensionNames.data(),
+		.enabledExtensionCount = static_cast<uint32_t>(deviceExtensionNames.size()),
+		.ppEnabledExtensionNames = deviceExtensionNames.data(),
 		.pEnabledFeatures = &deviceFeatures,
 	};
 
@@ -197,6 +239,10 @@ void Graphics::CreateLogicalDevice()
 void Graphics::CreateSwapChain()
 {
 	LOG_INFO("Creating swap chain...");
+
+	// The window may have changed size or display mode since the device was picked.
+	if (m_physicalDevice.getSurfaceCapabilitiesKHR(m_windowSurface, &m_windowSurfaceCapabilities) != vk::Result::eSuccess)
+		throw std::runtime_error("getSurfaceCapabilitiesKHR failed!");
 
 	m_swapChainFormat = m_swapChainFormats[0];
 	bool formatFound = false;
@@ -446,27 +492,56 @@ void Graphics::CreateGraphicsPipeline()
 {
 	LOG_INFO("Creating graphics pipeline...");
 
+	std::vector<vk::DescriptorSetLayout> descriptorSetLayouts = { m_dynamicUBODescriptorSetLayout, m_samplerDescriptorSetLayout, m_sceneDescriptorSetLayout };
+
+	vk::PushConstantRange objectConstants {
+		.stageFlags = vk::ShaderStageFlagBits::eFragment,
+		.offset = 0,
+		.size = sizeof(ObjectPushConstants)
+	};
+
+	std::vector<vk::PushConstantRange> pushConstants = { objectConstants };
+
+	vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
+		.flags = {},
+		.setLayoutCount = static_cast<uint32_t>(descriptorSetLayouts.size()),
+		.pSetLayouts = descriptorSetLayouts.data(),
+		.pushConstantRangeCount = static_cast<uint32_t>(pushConstants.size()),
+		.pPushConstantRanges = pushConstants.data()
+	};
+	if (m_logicalDevice.createPipelineLayout(&pipelineLayoutInfo, nullptr, &m_pipelineLayout) != vk::Result::eSuccess)
+		throw std::runtime_error("failed to create pipeline layout!");
+
+	CreateScenePipelines(m_renderPass, m_MSAALevel, "Engine/Graphics/Shaders/Compiled/vert.spv", "Engine/Graphics/Shaders/Compiled/frag.spv",
+		1, m_pipelineGraphics, m_pipelineTransparent);
+
+	LOG_SUCCESS("Graphics pipeline created successfully!");
+}
+
+vk::ShaderModule Graphics::LoadShaderModule(const char* path)
+{
+	auto shaderCode = Utility::ReadFile(path);
+	vk::ShaderModuleCreateInfo shaderInfo {
+		.flags = {},
+		.codeSize = shaderCode.size(),
+		.pCode = reinterpret_cast<const uint32_t*>(shaderCode.data())
+	};
+	vk::ShaderModule shaderModule = {};
+	if (m_logicalDevice.createShaderModule(&shaderInfo, nullptr, &shaderModule) != vk::Result::eSuccess)
+		throw std::runtime_error(std::string("failed to create shader module for ") + path + "!");
+	return shaderModule;
+}
+
+void Graphics::CreateScenePipelines(vk::RenderPass renderPass, vk::SampleCountFlagBits samples, const char* vertexPath, const char* fragmentPath,
+	uint32_t colorAttachments, vk::Pipeline& opaque, vk::Pipeline& transparent)
+{
 	LOG_DEBUG("Creating shader modules for vertex and fragment shaders...");
 
 	auto graphicsSettings = Settings::Get()->GetGraphicsSettings();
 
 	// Load shader byte code into memory
-	auto vertShaderCode = Utility::ReadFile("Engine/Graphics/Shaders/Compiled/vert.spv");
-	vk::ShaderModuleCreateInfo vertShaderInfo{
-		.flags = {},
-		.codeSize = vertShaderCode.size(),
-		.pCode = reinterpret_cast<const uint32_t*>(vertShaderCode.data())
-	};
-	if (m_logicalDevice.createShaderModule(&vertShaderInfo, nullptr, &m_shaderModuleVertex) != vk::Result::eSuccess)
-		throw std::runtime_error("failed to create vertex shader module!");
-	auto fragShaderCode = Utility::ReadFile("Engine/Graphics/Shaders/Compiled/frag.spv");
-	vk::ShaderModuleCreateInfo fragShaderInfo {
-		.flags = {},
-		.codeSize = fragShaderCode.size(),
-		.pCode = reinterpret_cast<const uint32_t*>(fragShaderCode.data())
-	};
-	if (m_logicalDevice.createShaderModule(&fragShaderInfo, nullptr, &m_shaderModuleFragment) != vk::Result::eSuccess)
-		throw std::runtime_error("failed to create fragment shader module!");
+	m_shaderModuleVertex = LoadShaderModule(vertexPath);
+	m_shaderModuleFragment = LoadShaderModule(fragmentPath);
 
 	// Shader code
 	vk::PipelineShaderStageCreateInfo vertShaderStageInfo{
@@ -515,10 +590,17 @@ void Graphics::CreateGraphicsPipeline()
 		.format = vk::Format::eR32G32Sfloat,
 		.offset = offsetof(Vertex, texCoord)
 	};
+	vk::VertexInputAttributeDescription vertexNormalDesc {
+		.location = 3,
+		.binding = 0,
+		.format = vk::Format::eR32G32B32Sfloat,
+		.offset = offsetof(Vertex, normal)
+	};
 	std::vector<vk::VertexInputAttributeDescription> vertexDescriptions {
 		vertexPositionDesc,
 		vertexColorDesc,
-		vertexTexDesc
+		vertexTexDesc,
+		vertexNormalDesc
 	};
 	vk::PipelineVertexInputStateCreateInfo vertexInputInfo {
 		.flags = {},
@@ -565,8 +647,8 @@ void Graphics::CreateGraphicsPipeline()
 	// MSAA
 	vk::PipelineMultisampleStateCreateInfo multisamplingInfo {
 		.flags = {},
-		.rasterizationSamples = m_MSAALevel,
-		.sampleShadingEnable = vk::True,
+		.rasterizationSamples = samples,
+		.sampleShadingEnable = samples != vk::SampleCountFlagBits::e1 ? vk::True : vk::False,
 		.minSampleShading = 0.2f,
 		.pSampleMask = nullptr,
 		.alphaToCoverageEnable = VK_FALSE,
@@ -578,8 +660,8 @@ void Graphics::CreateGraphicsPipeline()
 		.depthTestEnable = vk::True,
 		.depthWriteEnable = vk::True,
 		.depthCompareOp = vk::CompareOp::eLess,
-		.depthBoundsTestEnable = vk::True,
-		.stencilTestEnable = vk::True,
+		.depthBoundsTestEnable = vk::False,
+		.stencilTestEnable = vk::False,
 		.front = {},
 		.back = {},
 		.minDepthBounds = 0.f,
@@ -595,44 +677,31 @@ void Graphics::CreateGraphicsPipeline()
 		.dstAlphaBlendFactor = vk::BlendFactor::eZero,
 		.colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA
 	};
+	// Any further attachment (motion vectors) is written as is.
+	vk::PipelineColorBlendAttachmentState extraAttachment {
+		.blendEnable = vk::False,
+		.colorWriteMask = vk::ColorComponentFlagBits::eR | vk::ColorComponentFlagBits::eG | vk::ColorComponentFlagBits::eB | vk::ColorComponentFlagBits::eA
+	};
+	std::vector<vk::PipelineColorBlendAttachmentState> colorBlendAttachments(colorAttachments, extraAttachment);
+	colorBlendAttachments[0] = colorBlendAttachment;
 	vk::PipelineColorBlendStateCreateInfo colorBlendInfo {
 		.flags = {},
 		.logicOpEnable = graphicsSettings.eColorBlending == ColorBlendingOptions::BITWISE ? VK_TRUE : VK_FALSE,
 		.logicOp = vk::LogicOp::eCopy,
-		.attachmentCount = 1,
-		.pAttachments = &colorBlendAttachment,
+		.attachmentCount = static_cast<uint32_t>(colorBlendAttachments.size()),
+		.pAttachments = colorBlendAttachments.data(),
 		.blendConstants = std::array<float, 4> { 0.0f, 0.0f, 0.0f, 0.0f }
 	};
 
-	std::vector<vk::DynamicState> dynamicStates { 
-		vk::DynamicState::eViewport, 
-		vk::DynamicState::eScissor 
+	std::vector<vk::DynamicState> dynamicStates {
+		vk::DynamicState::eViewport,
+		vk::DynamicState::eScissor
 	};
 	vk::PipelineDynamicStateCreateInfo dynamicStateInfo{
 		.flags = {},
 		.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size()),
 		.pDynamicStates = dynamicStates.data()
 	};
-
-	std::vector<vk::DescriptorSetLayout> descriptorSetLayouts = { m_dynamicUBODescriptorSetLayout, m_samplerDescriptorSetLayout };
-	
-	vk::PushConstantRange textureIndexConst {
-		.stageFlags = vk::ShaderStageFlagBits::eFragment,
-		.offset = 0,
-		.size = sizeof(uint32_t)
-	};
-
-	std::vector<vk::PushConstantRange> pushConstants = { textureIndexConst };
-	
-	vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
-		.flags = {},
-		.setLayoutCount = static_cast<uint32_t>(descriptorSetLayouts.size()),
-		.pSetLayouts = descriptorSetLayouts.data(),
-		.pushConstantRangeCount = static_cast<uint32_t>(pushConstants.size()),
-		.pPushConstantRanges = pushConstants.data()
-	};
-	if (m_logicalDevice.createPipelineLayout(&pipelineLayoutInfo, nullptr, &m_pipelineLayout) != vk::Result::eSuccess)
-		throw std::runtime_error("failed to create pipeline layout!");
 
 	vk::GraphicsPipelineCreateInfo pipelineInfo {
 		.flags = {},
@@ -648,20 +717,34 @@ void Graphics::CreateGraphicsPipeline()
 		.pColorBlendState = &colorBlendInfo,
 		.pDynamicState = &dynamicStateInfo,
 		.layout = m_pipelineLayout,
-		.renderPass = m_renderPass,
+		.renderPass = renderPass,
 		.subpass = 0,
 		.basePipelineHandle = VK_NULL_HANDLE,
 		.basePipelineIndex = -1
 	};
 
-	if (m_logicalDevice.createGraphicsPipelines(VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &m_pipelineGraphics) != vk::Result::eSuccess)
+	if (m_logicalDevice.createGraphicsPipelines(VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &opaque) != vk::Result::eSuccess)
 		throw std::runtime_error("failed to create graphics pipeline!");
+
+	// The same pipeline blended over what's behind it, for glass: tested against depth but not
+	// writing it, drawn back to front after everything solid. It leaves the motion vectors of
+	// whatever is behind the glass alone.
+	colorBlendAttachments[0].blendEnable = vk::True;
+	colorBlendAttachments[0].srcColorBlendFactor = vk::BlendFactor::eSrcAlpha;
+	colorBlendAttachments[0].dstColorBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha;
+	colorBlendAttachments[0].srcAlphaBlendFactor = vk::BlendFactor::eOne;
+	colorBlendAttachments[0].dstAlphaBlendFactor = vk::BlendFactor::eOneMinusSrcAlpha;
+	for (uint32_t i = 1; i < colorAttachments; i++)
+		colorBlendAttachments[i].colorWriteMask = {};
+	colorBlendInfo.logicOpEnable = vk::False;
+	depthStencilInfo.depthWriteEnable = vk::False;
+	rasterizerInfo.cullMode = vk::CullModeFlagBits::eNone;
+	if (m_logicalDevice.createGraphicsPipelines(VK_NULL_HANDLE, 1, &pipelineInfo, nullptr, &transparent) != vk::Result::eSuccess)
+		throw std::runtime_error("failed to create the transparent pipeline!");
 
 	// cleanup shader modules
 	m_logicalDevice.destroyShaderModule(m_shaderModuleFragment, nullptr);
 	m_logicalDevice.destroyShaderModule(m_shaderModuleVertex, nullptr);
-
-	LOG_SUCCESS("Graphics pipeline created successfully!");
 }
 
 void Graphics::CreateFrameBuffers()
@@ -781,6 +864,9 @@ void Graphics::RecreateSwapChain()
 	CreateMSAAResources();
 	CreateDepthResources();
 	CreateFrameBuffers();
+	// DLSS's targets follow the window size.
+	if (m_dlssMode != DLSSMode::OFF)
+		CreateUpscaleTargets();
 
 	LOG_SUCCESS("Swapchain recreated successfully!");
 }
@@ -949,7 +1035,7 @@ void Graphics::CreateDynamicUniformBuffers()
 	vk::DeviceSize minAlignment = m_physicalDeviceProps.limits.minUniformBufferOffsetAlignment - 1;
 	m_alignedUBOSize = (sizeof(UniformBuffer) + minAlignment) & ~minAlignment;
 
-	m_dynamicUniformBufferObjectCount = 200;
+	m_dynamicUniformBufferObjectCount = MAX_OBJECTS;
 	m_dynamicUniformBufferSize = m_alignedUBOSize * m_dynamicUniformBufferObjectCount;
 
 	m_dynamicUniformBuffers = std::vector<vk::Buffer>(m_maxFramesInFlight);
@@ -994,16 +1080,22 @@ void Graphics::CreateDescriptorPool(const uint32_t& numOfTextures)
 		.descriptorCount = static_cast<uint32_t>(m_maxFramesInFlight)
 	};
 
+	// Textures, plus one shadow map per scene set.
 	vk::DescriptorPoolSize texturePoolSize {
 		.type = vk::DescriptorType::eCombinedImageSampler,
-		.descriptorCount = numOfTextures
+		.descriptorCount = numOfTextures + static_cast<uint32_t>(m_maxFramesInFlight)
 	};
-	
-	std::vector<vk::DescriptorPoolSize> poolSizes { dynamicUBOPoolSize, texturePoolSize };
-	
+
+	vk::DescriptorPoolSize sceneUBOPoolSize {
+		.type = vk::DescriptorType::eUniformBuffer,
+		.descriptorCount = static_cast<uint32_t>(m_maxFramesInFlight)
+	};
+
+	std::vector<vk::DescriptorPoolSize> poolSizes { dynamicUBOPoolSize, texturePoolSize, sceneUBOPoolSize };
+
 	vk::DescriptorPoolCreateInfo poolInfo {
 		.flags = vk::DescriptorPoolCreateFlagBits::eUpdateAfterBind,
-		.maxSets = static_cast<uint32_t>(m_maxFramesInFlight + numOfTextures),
+		.maxSets = static_cast<uint32_t>(m_maxFramesInFlight * 2 + numOfTextures),
 		.poolSizeCount = static_cast<uint32_t>(poolSizes.size()),
 		.pPoolSizes = poolSizes.data(),
 	};
@@ -1869,6 +1961,7 @@ void Graphics::CleanupVulkan()
 	LOG_INFO("Cleaning up Vulkan...");
 
 	CleanupSwapChain();
+	CleanupUpscaleResources();
 
 	for (const auto& buffer : m_manageBuffers)
 		m_logicalDevice.destroyBuffer(buffer, nullptr);
@@ -1880,6 +1973,8 @@ void Graphics::CleanupVulkan()
 		m_logicalDevice.destroyImage(image, nullptr);
 	for (const auto& memory : m_manageMemories)
 		m_logicalDevice.freeMemory(memory, nullptr);
+
+	CleanupSceneResources();
 
 	m_logicalDevice.destroyDescriptorPool(m_graphicsDescriptorPool, nullptr);
 

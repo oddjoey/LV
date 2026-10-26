@@ -82,13 +82,13 @@
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <LinkIncremental>true</LinkIncremental>
-    <IncludePath>$(ProjectDir)Libraries\vulkan\Include;$(ProjectDir)Libraries\glfw-3.4\include;$(ProjectDir)Libraries\imgui;$(ProjectDir)Libraries\glm;$(ProjectDir)Libraries\magic_enum\include\magic_enum;$(ProjectDir)Libraries\stb;$(ProjectDir)Libraries\termcolor\include\termcolor;$(ProjectDir)Libraries\tinyobjloader;$(ProjectDir)Libraries\ufbx;$(IncludePath)</IncludePath>
+    <IncludePath>$(ProjectDir)Libraries\vulkan\Include;$(ProjectDir)Libraries\glfw-3.4\include;$(ProjectDir)Libraries\imgui;$(ProjectDir)Libraries\glm;$(ProjectDir)Libraries\magic_enum\include\magic_enum;$(ProjectDir)Libraries\stb;$(ProjectDir)Libraries\termcolor\include\termcolor;$(ProjectDir)Libraries\tinyobjloader;$(ProjectDir)Libraries\ufbx;$(ProjectDir)Libraries\DLSS\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(LibraryPath)</LibraryPath>
     <SourcePath>$(SourcePath)</SourcePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <LinkIncremental>false</LinkIncremental>
-    <IncludePath>G:\Programming\Libraries\Vulkan-SDK\Include;G:\Programming\Libraries\stb_image;G:\Programming\Libraries\magic_enum-v0.9.7\include;G:\Programming\Libraries\termcolor;G:\Programming\Libraries\glm;G:\Programming\Libraries\tinyobjloader;G:\Programming\Libraries\glfw\glfw\include;G:\Programming\C++\Projects\LV\Libraries\imgui\backends;G:\Programming\C++\Projects\LV\Libraries\imgui;$(IncludePath)</IncludePath>
+    <IncludePath>G:\Programming\Libraries\Vulkan-SDK\Include;G:\Programming\Libraries\stb_image;G:\Programming\Libraries\magic_enum-v0.9.7\include;G:\Programming\Libraries\termcolor;G:\Programming\Libraries\glm;G:\Programming\Libraries\tinyobjloader;G:\Programming\Libraries\glfw\glfw\include;G:\Programming\C++\Projects\LV\Libraries\imgui\backends;G:\Programming\C++\Projects\LV\Libraries\imgui;$(ProjectDir)Libraries\DLSS\include;$(IncludePath)</IncludePath>
     <LibraryPath>D:\Programming\Libraries\glfw\build\src\Release;$(LibraryPath)</LibraryPath>
     <SourcePath>$(SourcePath)</SourcePath>
   </PropertyGroup>
@@ -147,9 +147,13 @@
     <Link>
       <SubSystem>Console</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>$(ProjectDir)Libraries\vulkan\Lib;D:\Projects\Git Repos\LV\Libraries\glfw-3.4\lib-vc2026</AdditionalLibraryDirectories>
+      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;nvsdk_ngx_d_dbg.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(ProjectDir)Libraries\vulkan\Lib;D:\Projects\Git Repos\LV\Libraries\glfw-3.4\lib-vc2026;$(ProjectDir)Libraries\DLSS\lib\Windows_x86_64\x64</AdditionalLibraryDirectories>
     </Link>
+    <PostBuildEvent>
+      <Command>xcopy /y /d "$(ProjectDir)Libraries\DLSS\lib\Windows_x86_64\rel\nvngx_dlss.dll" "$(OutDir)"</Command>
+      <Message>Copy the DLSS runtime next to the executable</Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -169,9 +173,13 @@
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
       <OptimizeReferences>true</OptimizeReferences>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;%(AdditionalDependencies)</AdditionalDependencies>
-      <AdditionalLibraryDirectories>D:\Programming\Libraries\Vulkan-SDK\Lib;D:\Programming\Libraries\glfw-3.3.9.bin.WIN64\lib-vc2022</AdditionalLibraryDirectories>
+      <AdditionalDependencies>vulkan-1.lib;glfw3.lib;nvsdk_ngx_d.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalLibraryDirectories>D:\Programming\Libraries\Vulkan-SDK\Lib;D:\Programming\Libraries\glfw-3.3.9.bin.WIN64\lib-vc2022;$(ProjectDir)Libraries\DLSS\lib\Windows_x86_64\x64</AdditionalLibraryDirectories>
     </Link>
+    <PostBuildEvent>
+      <Command>xcopy /y /d "$(ProjectDir)Libraries\DLSS\lib\Windows_x86_64\rel\nvngx_dlss.dll" "$(OutDir)"</Command>
+      <Message>Copy the DLSS runtime next to the executable</Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="Engine\Objects\CameraManager.cpp" />
@@ -200,6 +208,42 @@
     <ClCompile Include="Engine\Graphics\Models\Texture.cpp" />
     <ClCompile Include="Engine\Graphics\Models\TextureManager.cpp" />
     <ClCompile Include="Engine\Utility\PerformanceManager.cpp" />
+    <ClCompile Include="Game\UI\DevMenu.cpp" />
+    <ClCompile Include="Engine\Graphics\DLSS.cpp" />
+    <ClCompile Include="Engine\Graphics\GraphicsUpscaling.cpp" />
+    <ClCompile Include="Game\World\ShopOutdoors.cpp" />
+    <ClCompile Include="Game\World\ShopWorldOutdoors.cpp" />
+    <ClCompile Include="Game\World\ShopLighting.cpp" />
+    <ClCompile Include="Game\Save\SaveGame.cpp" />
+    <ClCompile Include="Engine\Graphics\GraphicsLighting.cpp" />
+    <ClCompile Include="Game\UI\Ratings.cpp" />
+    <ClCompile Include="Game\Inventory\PlayerInventory.cpp" />
+    <ClCompile Include="Game\UI\ItemIcons.cpp" />
+    <ClCompile Include="Game\UI\InventoryUI.cpp" />
+    <ClCompile Include="Game\World\ShopWorldTools.cpp" />
+    <ClCompile Include="Game\GameSettings.cpp" />
+    <ClCompile Include="Game\UI\PartIcons.cpp" />
+    <ClCompile Include="Game\UI\PauseMenu.cpp" />
+    <ClCompile Include="Libraries\ufbx\ufbx.c" />
+    <ClCompile Include="Game\World\FirstPersonController.cpp" />
+    <ClCompile Include="Game\World\ProceduralTextures.cpp" />
+    <ClCompile Include="Game\World\ShopAssets.cpp" />
+    <ClCompile Include="Game\World\ShopWorld.cpp" />
+    <ClCompile Include="Engine\Graphics\Models\MeshBuilder.cpp" />
+    <ClCompile Include="Game\EngineBuilderGame.cpp" />
+    <ClCompile Include="Game\UI\WorkshopUI.cpp" />
+    <ClCompile Include="Game\Simulation\Dyno.cpp" />
+    <ClCompile Include="Game\Simulation\EngineAssembly.cpp" />
+    <ClCompile Include="Game\Simulation\EngineSpec.cpp" />
+    <ClCompile Include="Game\Simulation\Feature.cpp" />
+    <ClCompile Include="Game\Simulation\Machine.cpp" />
+    <ClCompile Include="Game\Simulation\Material.cpp" />
+    <ClCompile Include="Game\Simulation\MeasuringTool.cpp" />
+    <ClCompile Include="Game\Simulation\Part.cpp" />
+    <ClCompile Include="Game\Simulation\PartFactory.cpp" />
+    <ClCompile Include="Game\Simulation\Random.cpp" />
+    <ClCompile Include="Game\Simulation\Units.cpp" />
+    <ClCompile Include="Game\Simulation\Workshop.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Engine\Objects\CameraManager.h" />
@@ -230,6 +274,43 @@
     <ClInclude Include="Engine\Graphics\Models\TextureManager.h" />
     <ClInclude Include="Engine\Graphics\IMGUI\IMGUIManager.h" />
     <ClInclude Include="Engine\Utility\PerformanceManager.h" />
+    <ClInclude Include="Game\UI\DevMenu.h" />
+    <ClInclude Include="Engine\Graphics\DLSS.h" />
+    <ClInclude Include="Game\World\GarageLayout.h" />
+    <ClInclude Include="Game\World\ShopLighting.h" />
+    <ClInclude Include="Game\Save\SaveGame.h" />
+    <ClInclude Include="Engine\Graphics\Lighting.h" />
+    <ClInclude Include="Engine\Objects\ObjectShading.h" />
+    <ClInclude Include="Game\UI\Ratings.h" />
+    <ClInclude Include="Game\Inventory\PlayerInventory.h" />
+    <ClInclude Include="Game\UI\ItemIcons.h" />
+    <ClInclude Include="Game\UI\InventoryUI.h" />
+    <ClInclude Include="Game\World\ShopWorldShared.h" />
+    <ClInclude Include="Game\World\ToolShapes.h" />
+    <ClInclude Include="Game\GameSettings.h" />
+    <ClInclude Include="Game\UI\PartIcons.h" />
+    <ClInclude Include="Game\UI\PauseMenu.h" />
+    <ClInclude Include="Game\World\FirstPersonController.h" />
+    <ClInclude Include="Game\World\ProceduralTextures.h" />
+    <ClInclude Include="Game\World\ShopAssets.h" />
+    <ClInclude Include="Game\World\ShopWorld.h" />
+    <ClInclude Include="Engine\Graphics\Models\MeshBuilder.h" />
+    <ClInclude Include="Engine\Game.h" />
+    <ClInclude Include="Game\EngineBuilderGame.h" />
+    <ClInclude Include="Game\UI\WorkshopUI.h" />
+    <ClInclude Include="Game\Simulation\Dyno.h" />
+    <ClInclude Include="Game\Simulation\EngineAssembly.h" />
+    <ClInclude Include="Game\Simulation\EngineSpec.h" />
+    <ClInclude Include="Game\Simulation\Feature.h" />
+    <ClInclude Include="Game\Simulation\Machine.h" />
+    <ClInclude Include="Game\Simulation\Material.h" />
+    <ClInclude Include="Game\Simulation\MeasuringTool.h" />
+    <ClInclude Include="Game\Simulation\Part.h" />
+    <ClInclude Include="Game\Simulation\PartFactory.h" />
+    <ClInclude Include="Game\Simulation\Random.h" />
+    <ClInclude Include="Game\Simulation\Tolerance.h" />
+    <ClInclude Include="Game\Simulation\Units.h" />
+    <ClInclude Include="Game\Simulation\Workshop.h" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Libraries\imgui\misc\debuggers\imgui.natstepfilter" />

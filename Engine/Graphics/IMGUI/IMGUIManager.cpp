@@ -72,7 +72,8 @@ void IMGUIManager::CreateDescriptorPool()
 {
 	std::vector<vk::DescriptorPoolSize> poolSizes = {
 		{ vk::DescriptorType::eSampler, IMGUI_IMPL_VULKAN_MINIMUM_SAMPLER_POOL_SIZE },
-		{ vk::DescriptorType::eCombinedImageSampler, IMGUI_IMPL_VULKAN_MINIMUM_SAMPLED_IMAGE_POOL_SIZE }
+		// ImGui 1.92's Vulkan backend binds textures as separate sampled images and samplers.
+		{ vk::DescriptorType::eSampledImage, IMGUI_IMPL_VULKAN_MINIMUM_SAMPLED_IMAGE_POOL_SIZE }
 		//{ vk::DescriptorType::eSampledImage, 1000 },
 		//{ vk::DescriptorType::eStorageImage, 1000 },
 		//{ vk::DescriptorType::eUniformTexelBuffer, 1000 },
@@ -254,13 +255,21 @@ void IMGUIManager::WindowSetup()
 	ImGui::End();
 }
 
+void IMGUIManager::SetGUICallback(const std::function<void()>& callback)
+{
+	m_guiCallback = callback;
+}
+
 void IMGUIManager::RecordCommandBuffer(const vk::CommandBuffer& commandBuffer)
 {
 	ImGui_ImplVulkan_NewFrame();
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
 
-	WindowSetup();
+	if (m_showIMGUI)
+		WindowSetup();
+	if (m_guiCallback)
+		m_guiCallback();
 
 	ImGui::Render();
 	ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);

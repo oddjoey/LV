@@ -416,3 +416,10 @@ FodyWeavers.xsd
 
 /Libraries/
 /Libraries/*
+
+# Per-player game settings
+game_settings.cfg
+
+# Saved careers
+savegame.lvsave
+savegame.lvsave.tmp

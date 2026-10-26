@@ -16,6 +16,8 @@ public:
 	void CreateModels();
 	uint32_t GetModelIndex(const std::string& modelName);
 	uint32_t GetModelCount() const;
+	// index as returned by Model::GetIndex (1-based); nullptr if out of range.
+	pModel GetModel(const uint32_t& index) const;
 	std::vector<std::string> GetModelNames() const;
 private:
 

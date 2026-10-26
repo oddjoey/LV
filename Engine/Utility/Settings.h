@@ -14,6 +14,25 @@ enum class VSyncOptions
 	MAILBOX
 };
 
+enum class DisplayMode
+{
+	WINDOWED,
+	BORDERLESS,	// a window covering the whole monitor at its desktop resolution
+	FULLSCREEN	// exclusive, at the chosen resolution
+};
+
+// NVIDIA DLSS Super Resolution. Each mode renders the scene smaller and upscales it to the window;
+// DLAA renders at full size and only anti-aliases.
+enum class DLSSMode
+{
+	OFF,
+	DLAA,
+	QUALITY,
+	BALANCED,
+	PERFORMANCE,
+	ULTRA_PERFORMANCE
+};
+
 enum class ColorBlendingOptions
 {
 	NONE,

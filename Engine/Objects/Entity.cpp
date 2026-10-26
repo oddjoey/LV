@@ -54,3 +54,11 @@ glm::vec3 Entity::GetAngles() const
 {
 	return glm::degrees(glm::eulerAngles(m_rotation));
 }
+
+glm::mat4 Entity::GetModelMatrix() const
+{
+	glm::mat4 translation = glm::translate(glm::mat4(1.f), m_position);
+	glm::mat4 rotation = glm::mat4_cast(m_rotation);
+	glm::mat4 scale = glm::scale(glm::mat4(1.f), m_scale);
+	return translation * rotation * scale;
+}

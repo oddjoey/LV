@@ -2,9 +2,18 @@
 
 #include <unordered_map>
 #include <memory>
+#include <optional>
+#include <functional>
 
 #include "Object.h"
 #include "../Utility/Utility.h"
+
+struct RaycastHit
+{
+	pObject object = nullptr;
+	float distance = 0.f;
+	glm::vec3 point = {};
+};
 
 class ObjectManager
 {
@@ -13,6 +22,9 @@ public:
 	ObjectManager();
 	~ObjectManager();
 	pObject CreateObject(const Object& objInfo);
+	// Closest visible, pickable object whose model bounds the ray crosses. direction must be normalized.
+	std::optional<RaycastHit> Raycast(const glm::vec3& origin, const glm::vec3& direction, float maxDistance,
+		const std::function<bool(const pObject&)>& filter = nullptr) const;
 	void AddObject(const pObject& obj = nullptr);
 	void RemoveObject(const pObject& obj);
 	void ChangeObjectModel(const pObject& object, const uint32_t newModelIndex);

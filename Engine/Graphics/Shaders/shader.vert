@@ -1,21 +1,41 @@
 #version 450
+#extension GL_GOOGLE_include_directive : require
 
 layout(set = 0, binding = 0) uniform UniformBufferObject
 {
     mat4 model;
     mat4 view;
     mat4 proj;
+    mat4 previousModel;
 } ubo;
+
+#include "scene_data.glsl"
 
 layout(location = 0) in vec3 inPosition;
 layout(location = 1) in vec3 inColor;
 layout(location = 2) in vec2 inTexCoord;
+layout(location = 3) in vec3 inNormal;
 
 layout(location = 0) out vec3 fragColor;
 layout(location = 1) out vec2 fragTexCoord;
+layout(location = 2) out vec3 fragNormal;
+layout(location = 3) out vec3 fragWorldPosition;
+#ifdef MOTION_VECTORS
+// Where the vertex is on screen this frame and was last frame, for DLSS's motion vectors.
+layout(location = 4) out vec4 fragClipPosition;
+layout(location = 5) out vec4 fragPreviousClipPosition;
+#endif
 
 void main() {
-    gl_Position = ubo.proj * ubo.view * ubo.model * vec4(inPosition, 1.0);
+    vec4 worldPosition = ubo.model * vec4(inPosition, 1.0);
+    gl_Position = ubo.proj * ubo.view * worldPosition;
     fragColor = inColor;
     fragTexCoord = inTexCoord;
+    // Good enough for the uniform and near-uniform scales the engine uses.
+    fragNormal = mat3(ubo.model) * inNormal;
+    fragWorldPosition = worldPosition.xyz;
+#ifdef MOTION_VECTORS
+    fragClipPosition = gl_Position;
+    fragPreviousClipPosition = scene.previousViewProj * ubo.previousModel * vec4(inPosition, 1.0);
+#endif
 }

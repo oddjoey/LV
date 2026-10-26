@@ -15,7 +15,7 @@ ModelManager::~ModelManager()
 void ModelManager::AddModel(const pModel& model)
 {
 	m_models.push_back(model);
-	model->SetIndex(static_cast<uint8_t>(m_models.size()));
+	model->SetIndex(static_cast<uint32_t>(m_models.size()));
 }
 
 pModel ModelManager::CreateModel(const Model& modelInfo)
@@ -74,6 +74,13 @@ uint32_t ModelManager::GetModelIndex(const std::string& modelName)
 uint32_t ModelManager::GetModelCount() const
 {
 	return static_cast<uint32_t>(m_models.size());
+}
+
+pModel ModelManager::GetModel(const uint32_t& index) const
+{
+	if (index == 0 || index > m_models.size())
+		return nullptr;
+	return m_models[index - 1];
 }
 
 std::vector<std::string> ModelManager::GetModelNames() const
