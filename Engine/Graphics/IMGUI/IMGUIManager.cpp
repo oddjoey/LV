@@ -101,6 +101,22 @@ void IMGUIManager::WindowSetup()
 	if (ImGui::Begin("Lordi"))
 	{
 		if (ImGui::BeginChild("Menu"))
+			DrawDebugContents();
+		ImGui::EndChild();
+	}
+	ImGui::End();
+}
+
+void IMGUIManager::SetDebugWindowEnabled(bool enabled)
+{
+	m_debugWindowEnabled = enabled;
+	if (!enabled)
+		m_showIMGUI = false;
+}
+
+void IMGUIManager::DrawDebugContents()
+{
+	{
 		{
 			if (ImGui::CollapsingHeader("Performance"))
 			{
@@ -249,10 +265,8 @@ void IMGUIManager::WindowSetup()
 					ImGui::TreePop();
 				}
 			}
-			ImGui::EndChild();
 		}
 	}
-	ImGui::End();
 }
 
 void IMGUIManager::SetGUICallback(const std::function<void()>& callback)
@@ -266,7 +280,7 @@ void IMGUIManager::RecordCommandBuffer(const vk::CommandBuffer& commandBuffer)
 	ImGui_ImplGlfw_NewFrame();
 	ImGui::NewFrame();
 
-	if (m_showIMGUI)
+	if (m_showIMGUI && m_debugWindowEnabled)
 		WindowSetup();
 	if (m_guiCallback)
 		m_guiCallback();

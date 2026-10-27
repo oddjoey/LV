@@ -88,41 +88,60 @@ vk::CommandBuffer Renderer::RecordCommandBuffer(const uint32_t& imageIndex)
 
 	vk::DeviceSize vertexOffset = 0;
 
-	// Sun shadows: one depth-only pass per cascade.
-	if (camera && scene.shadowParams.z > 0.5f)
-	{
-		uint32_t resolution = m_graphics->m_shadowResolution;
+	// One depth-only pass into a shadow map layer, drawing the solid lit objects that cast shadows
+	// (and, for lamps, only those that can be within reach).
+	auto shadowPass = [&](const vk::Framebuffer& framebuffer, uint32_t resolution, const glm::mat4& lightViewProj,
+		const glm::vec3* lampPosition, float reach) {
 		vk::Viewport shadowViewport { 0.f, 0.f, static_cast<float>(resolution), static_cast<float>(resolution), 0.f, 1.f };
 		vk::Rect2D shadowScissor { { 0, 0 }, { resolution, resolution } };
 		vk::ClearValue clearShadow = { .depthStencil = { 1.f, 0 } };
+		vk::RenderPassBeginInfo shadowBeginInfo {
+			.renderPass = m_graphics->m_shadowRenderPass,
+			.framebuffer = framebuffer,
+			.renderArea = shadowScissor,
+			.clearValueCount = 1,
+			.pClearValues = &clearShadow
+		};
+		commandBuffer.beginRenderPass(&shadowBeginInfo, vk::SubpassContents::eInline);
+		commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, m_graphics->m_shadowPipeline);
+		commandBuffer.setViewport(0, 1, &shadowViewport);
+		commandBuffer.setScissor(0, 1, &shadowScissor);
+		commandBuffer.bindVertexBuffers(0, 1, &m_modelManger->m_vertexBuffer, &vertexOffset);
+		commandBuffer.bindIndexBuffer(m_modelManger->m_indexBuffer, 0, vk::IndexType::eUint32);
+		commandBuffer.pushConstants(m_graphics->m_shadowPipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4), &lightViewProj);
 
-		for (int cascade = 0; cascade < SHADOW_CASCADES; cascade++)
+		for (const auto& item : opaque)
 		{
-			vk::RenderPassBeginInfo shadowBeginInfo {
-				.renderPass = m_graphics->m_shadowRenderPass,
-				.framebuffer = m_graphics->m_shadowFramebuffers[cascade],
-				.renderArea = shadowScissor,
-				.clearValueCount = 1,
-				.pClearValues = &clearShadow
-			};
-			commandBuffer.beginRenderPass(&shadowBeginInfo, vk::SubpassContents::eInline);
-			commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, m_graphics->m_shadowPipeline);
-			commandBuffer.setViewport(0, 1, &shadowViewport);
-			commandBuffer.setScissor(0, 1, &shadowScissor);
-			commandBuffer.bindVertexBuffers(0, 1, &m_modelManger->m_vertexBuffer, &vertexOffset);
-			commandBuffer.bindIndexBuffer(m_modelManger->m_indexBuffer, 0, vk::IndexType::eUint32);
-			commandBuffer.pushConstants(m_graphics->m_shadowPipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4), &scene.lightViewProj[cascade]);
+			if (!item.object->CastsShadows() || item.object->GetShading() != ObjectShading::LIT)
+				continue;
+			if (lampPosition && glm::distance(item.object->GetPosition(), *lampPosition) > reach)
+				continue;
+			commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_graphics->m_shadowPipelineLayout, 0, 1,
+				&m_graphics->m_dynamicUBODescriptorSets[frame], 1, &item.dynamicOffset);
+			commandBuffer.drawIndexed(m_modelManger->m_indicesCounts[item.modelIndex - 1], 1, m_modelManger->m_indicesOffsets[item.modelIndex - 1],
+				static_cast<uint32_t>(m_modelManger->m_verticesOffsets[item.modelIndex - 1]), 0);
+		}
+		commandBuffer.endRenderPass();
+	};
 
-			for (const auto& item : opaque)
-			{
-				if (!item.object->CastsShadows() || item.object->GetShading() != ObjectShading::LIT)
-					continue;
-				commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_graphics->m_shadowPipelineLayout, 0, 1,
-					&m_graphics->m_dynamicUBODescriptorSets[frame], 1, &item.dynamicOffset);
-				commandBuffer.drawIndexed(m_modelManger->m_indicesCounts[item.modelIndex - 1], 1, m_modelManger->m_indicesOffsets[item.modelIndex - 1],
-					static_cast<uint32_t>(m_modelManger->m_verticesOffsets[item.modelIndex - 1]), 0);
-			}
-			commandBuffer.endRenderPass();
+	// Sun shadows: one pass per cascade.
+	if (camera && scene.shadowParams.z > 0.5f)
+		for (int cascade = 0; cascade < SHADOW_CASCADES; cascade++)
+			shadowPass(m_graphics->m_shadowFramebuffers[cascade], m_graphics->m_shadowResolution, scene.lightViewProj[cascade], nullptr, 0.f);
+
+	// Lamp shadows: one pass per shadowed light. Objects are culled by their origin, so the reach
+	// allows for big ones (a machine, the car) whose origin is outside the light's range.
+	if (camera)
+	{
+		int count = (std::min)(static_cast<int>(m_lighting.pointLights.size()), MAX_POINT_LIGHTS);
+		for (int i = 0; i < count; i++)
+		{
+			int layer = static_cast<int>(scene.lightShadow[i].x);
+			if (scene.lightShadow[i].x < 0.f)
+				continue;
+			const auto& light = m_lighting.pointLights[i];
+			shadowPass(m_graphics->m_lightShadowFramebuffers[layer], m_graphics->m_lightShadowResolution, scene.lightShadowViewProj[layer],
+				&light.position, light.range + 3.f);
 		}
 	}
 
@@ -405,11 +424,34 @@ void Renderer::WriteSceneUniforms(const Camera& camera, float aspect, SceneUnifo
 
 	int count = (std::min)(static_cast<int>(m_lighting.pointLights.size()), MAX_POINT_LIGHTS);
 	scene.lightCount = { count, 0, 0, 0 };
+
+	// Lamp shadows follow the shadow quality setting (off turns them off too), sun or no sun.
+	uint32_t lampResolution = m_graphics->m_lightShadowResolution;
+	bool lampShadows = m_shadowSettings.resolution > 0 && lampResolution > 1;
+	int shadowLayers = 0;
+	for (int i = 0; i < MAX_POINT_LIGHTS; i++)
+		scene.lightShadow[i] = { -1.f, 0.f, 0.f, 0.f };
+
 	for (int i = 0; i < count; i++)
 	{
 		const auto& light = m_lighting.pointLights[i];
 		scene.lightPositionRange[i] = glm::vec4(light.position, light.range);
 		scene.lightColorZone[i] = glm::vec4(light.color, static_cast<float>(light.zone));
+
+		if (!lampShadows || !light.castsShadows || shadowLayers >= MAX_SHADOWED_LIGHTS)
+			continue;
+		// A wide perspective view from the lamp along its shadow direction, out to its range.
+		float cone = glm::radians(std::clamp(light.shadowConeDegrees, 10.f, 170.f));
+		glm::vec3 direction = glm::normalize(light.shadowDirection);
+		glm::vec3 up = std::abs(direction.y) > 0.99f ? glm::vec3(0.f, 0.f, 1.f) : glm::vec3(0.f, 1.f, 0.f);
+		glm::mat4 view = glm::lookAt(light.position, light.position + direction, up);
+		glm::mat4 projection = glm::perspective(cone, 1.f, 0.05f, (std::max)(light.range, 0.1f));
+
+		int layer = shadowLayers++;
+		scene.lightShadowViewProj[layer] = projection * view;
+		// How wide one shadow texel is per metre of distance from the lamp, for the shader's offset.
+		float texelPerMetre = 2.f * std::tan(cone * 0.5f) / static_cast<float>(lampResolution);
+		scene.lightShadow[i] = { static_cast<float>(layer), texelPerMetre, 1.f / static_cast<float>(lampResolution), 0.f };
 	}
 }
 

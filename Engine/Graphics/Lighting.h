@@ -7,9 +7,11 @@
 
 constexpr int MAX_POINT_LIGHTS = 32;
 constexpr int SHADOW_CASCADES = 2;
+// Point lights that cast shadows get one shadow map each, up to this many per frame.
+constexpr int MAX_SHADOWED_LIGHTS = 8;
 
-// Which fragments a point light reaches. Lights aren't shadowed, so a lamp inside a building is
-// kept off the ground outside it (and a streetlight off the walls inside) this way instead.
+// Which fragments a point light reaches. Most lights aren't shadowed, so a lamp inside a building
+// is kept off the ground outside it (and a streetlight off the walls inside) this way instead.
 enum class LightZone : int
 {
 	EVERYWHERE = 0,
@@ -23,6 +25,12 @@ struct PointLight
 	float range = 6.f;
 	glm::vec3 color = { 1.f, 1.f, 1.f };	// premultiplied by intensity
 	LightZone zone = LightZone::EVERYWHERE;
+	// A shadowed light sees the scene through one wide shadow map aimed along shadowDirection
+	// (straight down suits a ceiling lamp); outside that cone it lights without shadows. Only the
+	// first MAX_SHADOWED_LIGHTS that ask for shadows get them.
+	bool castsShadows = false;
+	glm::vec3 shadowDirection = { 0.f, -1.f, 0.f };
+	float shadowConeDegrees = 150.f;
 };
 
 // Everything the scene is lit by. The game sets this every frame through the Renderer.
@@ -71,4 +79,6 @@ struct SceneUniforms
 	glm::vec4 lightColorZone[MAX_POINT_LIGHTS];
 	glm::mat4 previousViewProj;	// last frame's, without jitter: for motion vectors
 	glm::vec4 renderParams;		// xy: this frame's jitter in clip space, z: texture LOD bias
+	glm::mat4 lightShadowViewProj[MAX_SHADOWED_LIGHTS];
+	glm::vec4 lightShadow[MAX_POINT_LIGHTS];	// x: shadow map layer or -1, y: shadow texel size per metre of distance, z: 1 / resolution
 };

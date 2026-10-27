@@ -2,6 +2,7 @@
 // Lighting.h (std140).
 const int MAX_POINT_LIGHTS = 32;
 const int SHADOW_CASCADES = 2;
+const int MAX_SHADOWED_LIGHTS = 8;
 layout(set = 2, binding = 0) uniform SceneData {
     mat4 lightViewProj[SHADOW_CASCADES];
     vec4 shadowParams;      // xy: shadow texel size in metres per cascade, z: shadows on, w: 1 / resolution
@@ -20,4 +21,6 @@ layout(set = 2, binding = 0) uniform SceneData {
     vec4 lightColorZone[MAX_POINT_LIGHTS];
     mat4 previousViewProj;  // last frame's, without jitter: for motion vectors
     vec4 renderParams;      // xy: this frame's jitter in clip space, z: texture LOD bias
+    mat4 lightShadowViewProj[MAX_SHADOWED_LIGHTS];
+    vec4 lightShadow[MAX_POINT_LIGHTS];   // x: shadow map layer or -1, y: shadow texel size per metre of distance, z: 1 / resolution
 } scene;

@@ -9,8 +9,9 @@ A lightweight C++20 / Vulkan engine, built from scratch for learning and for rea
 ## 🚀 Features
 
 - **Vulkan 1.4** renderer with validation layers in debug builds
-- **Lighting**: sun/moon, sky and ground ambient, one interior zone with its own ambient, up to 32 point lights (limited to inside, outside or everywhere), exponential fog, ACES tone mapping with exposure
+- **Lighting**: sun/moon, sky and ground ambient, one interior zone with its own ambient, up to 32 point lights (limited to inside, outside or everywhere), of which up to 8 cast shadows, exponential fog, ACES tone mapping with exposure
 - **Sun shadows**: two cascades in a depth array, texel-snapped so they don't crawl, normal-offset lookups, 3×3 PCF
+- **Lamp shadows**: point lights with `castsShadows` get a wide shadow map along their shadow direction (straight down suits a ceiling lamp), at half the sun's resolution, following the shadow quality setting
 - **Glass**: transparent objects drawn after solid ones, sorted back to front
 - **NVIDIA DLSS Super Resolution** (DLAA to Ultra Performance) with motion vectors, jitter and mip bias; greyed out where unsupported
 - **Runtime video options**: windowed/borderless/fullscreen, resolution, V-Sync, shadow quality, DLSS mode and a frame cap all change live; MSAA at startup
@@ -145,7 +146,7 @@ MyGame/
 | A texture | `TextureManager::Get()->CreateTexture({ name, path })`, or `CreateTexture(name, width, height, rgbaPixels)` |
 | An object | `ObjectManager::Get()->CreateObject(Object(position, rotation, scale, modelIndex, textureIndex))`, then `SetTint`, `SetEmissive`, `SetShading`, `SetCastsShadows`, `SetVisible`… |
 | A camera | `CameraManager::Get()->CreateCamera(...)`, `SetActiveCamera(camera)` |
-| Lighting | Fill a `SceneLighting` (sun, sky, interior box, fog, exposure, point lights) and call `Renderer::Get()->SetSceneLighting(...)` every frame it changes |
+| Lighting | Fill a `SceneLighting` (sun, sky, interior box, fog, exposure, point lights, with `castsShadows` on the ones that should) and call `Renderer::Get()->SetSceneLighting(...)` every frame it changes |
 | Shadows | `Renderer::Get()->SetShadowSettings({ resolution, distance })` (resolution 0 turns them off) |
 | Video | `Graphics::Get()->SetDisplayMode(...)`, `SetVSync(...)`, `SetDLSSMode(...)`, `Lordi::Get()->SetFrameLimit(...)` |
 | After a cut | `Renderer::Get()->ResetTemporalHistory()` so DLSS doesn't blend in the old view |
@@ -173,7 +174,7 @@ Models, textures and objects can also be added once the game is running. Object 
 
 1. Every visible object gets its matrices in a dynamic uniform buffer (with last frame's, for motion vectors), sorted into solid and transparent lists.
 2. The scene uniform block is written: cascade matrices, sun, sky, interior, fog, point lights.
-3. **Shadow passes**: one depth-only pass per cascade, for lit objects that cast shadows.
+3. **Shadow passes**: one depth-only pass per sun cascade and per shadowed lamp, for lit objects that cast shadows (lamps only draw what's within their reach).
 4. **Scene**: solid objects, then glass back to front, either straight to the swap chain or, with DLSS, into colour, motion and depth targets at the render size with a jittered projection.
 5. **DLSS** (when on): upscales into a window-sized image, which a full-screen pass draws to the swap chain.
 6. **UI**: ImGui in the second subpass, at full resolution.
@@ -202,7 +203,6 @@ LV/
 
 - Only **Debug | x64** has project-relative library paths; the other configurations still point at old absolute paths.
 - MSAA is chosen at startup.
-- Point lights don't cast shadows.
 - Keep GPU drivers up to date; Vulkan (and DLSS) are strict about it.
 
 ---

@@ -29,7 +29,8 @@ void InputManager::KeyCallback(GLFWwindow* window, int key, int scancode, int ac
 			{
 				case GLFW_KEY_HOME:
 				{
-					m_imguiManager->m_showIMGUI = !m_imguiManager->m_showIMGUI;
+					if (m_imguiManager->m_debugWindowEnabled)
+						m_imguiManager->m_showIMGUI = !m_imguiManager->m_showIMGUI;
 					break;
 				}
 			}

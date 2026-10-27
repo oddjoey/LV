@@ -8,8 +8,8 @@ void Graphics::CreateSceneResources()
 {
 	LOG_INFO("Creating scene lighting resources...");
 
-	// Set 2: the scene uniform block and the shadow map.
-	std::array<vk::DescriptorSetLayoutBinding, 2> bindings = { {
+	// Set 2: the scene uniform block, the sun's shadow map and the lamps' shadow maps.
+	std::array<vk::DescriptorSetLayoutBinding, 3> bindings = { {
 		{
 			.binding = 0,
 			.descriptorType = vk::DescriptorType::eUniformBuffer,
@@ -19,6 +19,13 @@ void Graphics::CreateSceneResources()
 		},
 		{
 			.binding = 1,
+			.descriptorType = vk::DescriptorType::eCombinedImageSampler,
+			.descriptorCount = 1,
+			.stageFlags = vk::ShaderStageFlagBits::eFragment,
+			.pImmutableSamplers = nullptr
+		},
+		{
+			.binding = 2,
 			.descriptorType = vk::DescriptorType::eCombinedImageSampler,
 			.descriptorCount = 1,
 			.stageFlags = vk::ShaderStageFlagBits::eFragment,
@@ -270,72 +277,65 @@ void Graphics::CreateShadowPipeline()
 	m_logicalDevice.destroyShaderModule(shaderModule, nullptr);
 }
 
-void Graphics::CreateShadowMap(uint32_t resolution)
+void Graphics::CreateDepthLayers(uint32_t resolution, uint32_t layers, uint32_t binding, vk::Image& image, vk::DeviceMemory& memory,
+	vk::ImageView& arrayView, std::vector<vk::ImageView>& layerViews, std::vector<vk::Framebuffer>& framebuffers)
 {
-	resolution = (std::max)(resolution, 1u);
-	if (resolution == m_shadowResolution && m_shadowImage)
-		return;
-
-	// The old map may still be in use by a frame in flight.
-	m_logicalDevice.waitIdle();
-	CleanupShadowMap();
-
 	vk::ImageCreateInfo imageInfo {
 		.imageType = vk::ImageType::e2D,
 		.format = m_shadowFormat,
 		.extent = { resolution, resolution, 1 },
 		.mipLevels = 1,
-		.arrayLayers = SHADOW_CASCADES,
+		.arrayLayers = layers,
 		.samples = vk::SampleCountFlagBits::e1,
 		.tiling = vk::ImageTiling::eOptimal,
 		.usage = vk::ImageUsageFlagBits::eDepthStencilAttachment | vk::ImageUsageFlagBits::eSampled,
 		.sharingMode = vk::SharingMode::eExclusive,
 		.initialLayout = vk::ImageLayout::eUndefined
 	};
-	if (m_logicalDevice.createImage(&imageInfo, nullptr, &m_shadowImage) != vk::Result::eSuccess)
-		throw std::runtime_error("failed to create the shadow map!");
+	if (m_logicalDevice.createImage(&imageInfo, nullptr, &image) != vk::Result::eSuccess)
+		throw std::runtime_error("failed to create a shadow map!");
 
 	vk::MemoryRequirements requirements;
-	m_logicalDevice.getImageMemoryRequirements(m_shadowImage, &requirements);
+	m_logicalDevice.getImageMemoryRequirements(image, &requirements);
 	vk::MemoryAllocateInfo allocInfo {
 		.allocationSize = requirements.size,
 		.memoryTypeIndex = FindMemoryTypeIndex(requirements.memoryTypeBits, vk::MemoryPropertyFlagBits::eDeviceLocal)
 	};
-	if (m_logicalDevice.allocateMemory(&allocInfo, nullptr, &m_shadowImageMemory) != vk::Result::eSuccess)
+	if (m_logicalDevice.allocateMemory(&allocInfo, nullptr, &memory) != vk::Result::eSuccess)
 		throw std::runtime_error("failed to allocate shadow map memory!");
-	m_logicalDevice.bindImageMemory(m_shadowImage, m_shadowImageMemory, 0);
+	m_logicalDevice.bindImageMemory(image, memory, 0);
 
 	vk::ImageViewCreateInfo arrayViewInfo {
-		.image = m_shadowImage,
+		.image = image,
 		.viewType = vk::ImageViewType::e2DArray,
 		.format = m_shadowFormat,
-		.subresourceRange = { vk::ImageAspectFlagBits::eDepth, 0, 1, 0, SHADOW_CASCADES }
+		.subresourceRange = { vk::ImageAspectFlagBits::eDepth, 0, 1, 0, layers }
 	};
-	if (m_logicalDevice.createImageView(&arrayViewInfo, nullptr, &m_shadowArrayView) != vk::Result::eSuccess)
-		throw std::runtime_error("failed to create the shadow map view!");
+	if (m_logicalDevice.createImageView(&arrayViewInfo, nullptr, &arrayView) != vk::Result::eSuccess)
+		throw std::runtime_error("failed to create a shadow map view!");
 
-	m_shadowLayerViews = std::vector<vk::ImageView>(SHADOW_CASCADES);
-	m_shadowFramebuffers = std::vector<vk::Framebuffer>(SHADOW_CASCADES);
-	for (uint32_t layer = 0; layer < SHADOW_CASCADES; layer++)
+	layerViews = std::vector<vk::ImageView>(layers);
+	framebuffers = std::vector<vk::Framebuffer>(layers);
+	for (uint32_t layer = 0; layer < layers; layer++)
 	{
 		vk::ImageViewCreateInfo layerViewInfo {
-			.image = m_shadowImage,
+			.image = image,
 			.viewType = vk::ImageViewType::e2D,
 			.format = m_shadowFormat,
 			.subresourceRange = { vk::ImageAspectFlagBits::eDepth, 0, 1, layer, 1 }
 		};
-		if (m_logicalDevice.createImageView(&layerViewInfo, nullptr, &m_shadowLayerViews[layer]) != vk::Result::eSuccess)
-			throw std::runtime_error("failed to create a shadow cascade view!");
+		if (m_logicalDevice.createImageView(&layerViewInfo, nullptr, &layerViews[layer]) != vk::Result::eSuccess)
+			throw std::runtime_error("failed to create a shadow map layer view!");
 
 		vk::FramebufferCreateInfo framebufferInfo {
 			.renderPass = m_shadowRenderPass,
 			.attachmentCount = 1,
-			.pAttachments = &m_shadowLayerViews[layer],
+			.pAttachments = &layerViews[layer],
 			.width = resolution,
 			.height = resolution,
 			.layers = 1
 		};
-		if (m_logicalDevice.createFramebuffer(&framebufferInfo, nullptr, &m_shadowFramebuffers[layer]) != vk::Result::eSuccess)
+		if (m_logicalDevice.createFramebuffer(&framebufferInfo, nullptr, &framebuffers[layer]) != vk::Result::eSuccess)
 			throw std::runtime_error("failed to create a shadow framebuffer!");
 	}
 
@@ -348,8 +348,8 @@ void Graphics::CreateShadowMap(uint32_t resolution)
 		.newLayout = vk::ImageLayout::eShaderReadOnlyOptimal,
 		.srcQueueFamilyIndex = vk::QueueFamilyIgnored,
 		.dstQueueFamilyIndex = vk::QueueFamilyIgnored,
-		.image = m_shadowImage,
-		.subresourceRange = { vk::ImageAspectFlagBits::eDepth, 0, 1, 0, SHADOW_CASCADES }
+		.image = image,
+		.subresourceRange = { vk::ImageAspectFlagBits::eDepth, 0, 1, 0, layers }
 	};
 	commandBuffer.pipelineBarrier(vk::PipelineStageFlagBits::eTopOfPipe, vk::PipelineStageFlagBits::eFragmentShader, {}, 0, nullptr, 0, nullptr, 1, &barrier);
 	EndSingleTimeCommands(commandBuffer);
@@ -358,12 +358,12 @@ void Graphics::CreateShadowMap(uint32_t resolution)
 	{
 		vk::DescriptorImageInfo imageInfoDesc {
 			.sampler = m_shadowSampler,
-			.imageView = m_shadowArrayView,
+			.imageView = arrayView,
 			.imageLayout = vk::ImageLayout::eShaderReadOnlyOptimal
 		};
 		vk::WriteDescriptorSet write {
 			.dstSet = m_sceneDescriptorSets[i],
-			.dstBinding = 1,
+			.dstBinding = binding,
 			.dstArrayElement = 0,
 			.descriptorCount = 1,
 			.descriptorType = vk::DescriptorType::eCombinedImageSampler,
@@ -371,33 +371,73 @@ void Graphics::CreateShadowMap(uint32_t resolution)
 		};
 		m_logicalDevice.updateDescriptorSets(1, &write, 0, nullptr);
 	}
+}
 
+void Graphics::DestroyDepthLayers(vk::Image& image, vk::DeviceMemory& memory, vk::ImageView& arrayView, std::vector<vk::ImageView>& layerViews,
+	std::vector<vk::Framebuffer>& framebuffers)
+{
+	for (auto framebuffer : framebuffers)
+		m_logicalDevice.destroyFramebuffer(framebuffer, nullptr);
+	for (auto view : layerViews)
+		m_logicalDevice.destroyImageView(view, nullptr);
+	framebuffers.clear();
+	layerViews.clear();
+	if (arrayView)
+		m_logicalDevice.destroyImageView(arrayView, nullptr);
+	if (image)
+		m_logicalDevice.destroyImage(image, nullptr);
+	if (memory)
+		m_logicalDevice.freeMemory(memory, nullptr);
+	arrayView = nullptr;
+	image = nullptr;
+	memory = nullptr;
+}
+
+void Graphics::CreateShadowMap(uint32_t resolution)
+{
+	resolution = (std::max)(resolution, 1u);
+	if (resolution == m_shadowResolution && m_shadowImage)
+		return;
+
+	// The old map may still be in use by a frame in flight.
+	m_logicalDevice.waitIdle();
+	CleanupShadowMap();
+	CreateDepthLayers(resolution, SHADOW_CASCADES, 1, m_shadowImage, m_shadowImageMemory, m_shadowArrayView, m_shadowLayerViews, m_shadowFramebuffers);
 	m_shadowResolution = resolution;
+
+	// Lamps get half the sun's resolution: they light a room, not the whole yard.
+	CreateLightShadowMaps(resolution > 1 ? std::clamp(resolution / 2, 512u, 2048u) : 1u);
 }
 
 void Graphics::CleanupShadowMap()
 {
-	for (auto framebuffer : m_shadowFramebuffers)
-		m_logicalDevice.destroyFramebuffer(framebuffer, nullptr);
-	for (auto view : m_shadowLayerViews)
-		m_logicalDevice.destroyImageView(view, nullptr);
-	m_shadowFramebuffers.clear();
-	m_shadowLayerViews.clear();
-	if (m_shadowArrayView)
-		m_logicalDevice.destroyImageView(m_shadowArrayView, nullptr);
-	if (m_shadowImage)
-		m_logicalDevice.destroyImage(m_shadowImage, nullptr);
-	if (m_shadowImageMemory)
-		m_logicalDevice.freeMemory(m_shadowImageMemory, nullptr);
-	m_shadowArrayView = nullptr;
-	m_shadowImage = nullptr;
-	m_shadowImageMemory = nullptr;
+	DestroyDepthLayers(m_shadowImage, m_shadowImageMemory, m_shadowArrayView, m_shadowLayerViews, m_shadowFramebuffers);
 	m_shadowResolution = 0;
+}
+
+void Graphics::CreateLightShadowMaps(uint32_t resolution)
+{
+	resolution = (std::max)(resolution, 1u);
+	if (resolution == m_lightShadowResolution && m_lightShadowImage)
+		return;
+
+	m_logicalDevice.waitIdle();
+	CleanupLightShadowMaps();
+	CreateDepthLayers(resolution, MAX_SHADOWED_LIGHTS, 2, m_lightShadowImage, m_lightShadowImageMemory, m_lightShadowArrayView,
+		m_lightShadowLayerViews, m_lightShadowFramebuffers);
+	m_lightShadowResolution = resolution;
+}
+
+void Graphics::CleanupLightShadowMaps()
+{
+	DestroyDepthLayers(m_lightShadowImage, m_lightShadowImageMemory, m_lightShadowArrayView, m_lightShadowLayerViews, m_lightShadowFramebuffers);
+	m_lightShadowResolution = 0;
 }
 
 void Graphics::CleanupSceneResources()
 {
 	CleanupShadowMap();
+	CleanupLightShadowMaps();
 	m_logicalDevice.destroyPipeline(m_shadowPipeline, nullptr);
 	m_logicalDevice.destroyPipelineLayout(m_shadowPipelineLayout, nullptr);
 	m_logicalDevice.destroyRenderPass(m_shadowRenderPass, nullptr);

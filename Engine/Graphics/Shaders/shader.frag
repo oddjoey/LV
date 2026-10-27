@@ -11,6 +11,8 @@ layout(set = 1, binding = 0) uniform sampler2D textures[];
 
 #include "scene_data.glsl"
 layout(set = 2, binding = 1) uniform sampler2DArrayShadow shadowMap;
+// One layer per shadowed point light.
+layout(set = 2, binding = 2) uniform sampler2DArrayShadow lightShadowMaps;
 
 // Must match ObjectPushConstants in Utility.h.
 layout(push_constant) uniform PushData {
@@ -83,7 +85,36 @@ float SunShadow(vec3 position, vec3 normal, float facing) {
     return -1.0;
 }
 
-// Lamps: unshadowed, with a smooth cut-off at their range.
+// How much of a shadowed lamp's light reaches the point: 0 shadowed to 1 lit. Outside the lamp's
+// shadow cone it's lit.
+float LampShadow(int light, vec3 position, vec3 normal, float distance, float facing) {
+    vec4 shadow = scene.lightShadow[light];
+    int layer = int(shadow.x + 0.5);
+    if (shadow.x < 0.0)
+        return 1.0;
+
+    // A shadow texel covers more surface the further it is from the lamp, so the offset off the
+    // surface grows with distance (and on surfaces turned away from the light).
+    float texelWorld = shadow.y * distance;
+    vec3 offsetPosition = position + normal * texelWorld * (1.5 + 2.5 * (1.0 - facing));
+    vec4 clip = scene.lightShadowViewProj[layer] * vec4(offsetPosition, 1.0);
+    if (clip.w <= 0.0)
+        return 1.0;
+    vec3 projected = clip.xyz / clip.w;
+    vec2 uv = projected.xy * 0.5 + 0.5;
+    if (any(lessThan(uv, vec2(0.0))) || any(greaterThan(uv, vec2(1.0))) || projected.z <= 0.0 || projected.z >= 1.0)
+        return 1.0;
+
+    float texel = shadow.z;
+    float lit = 0.0;
+    for (int x = -1; x <= 1; x++)
+        for (int y = -1; y <= 1; y++)
+            lit += texture(lightShadowMaps, vec4(uv + vec2(x, y) * texel, float(layer), projected.z));
+    return lit / 9.0;
+}
+
+// Lamps, with a smooth cut-off at their range. Shadowed ones keep a little of their light in
+// shadow, standing in for what bounces off the walls and floor.
 vec3 PointLights(vec3 position, vec3 normal, bool inside) {
     vec3 total = vec3(0.0);
     for (int i = 0; i < scene.lightCount.x; i++) {
@@ -101,7 +132,8 @@ vec3 PointLights(vec3 position, vec3 normal, bool inside) {
         float window = clamp(1.0 - ratio * ratio * ratio * ratio, 0.0, 1.0);
         float attenuation = window * window / (1.0 + distance * distance);
         float facing = max(dot(normal, toLight / max(distance, 1e-4)), 0.0);
-        total += colorZone.rgb * attenuation * (facing * 0.85 + 0.15);
+        float shadow = LampShadow(i, position, normal, distance, facing);
+        total += colorZone.rgb * attenuation * (facing * 0.85 + 0.15) * mix(0.06, 1.0, shadow);
     }
     return total;
 }

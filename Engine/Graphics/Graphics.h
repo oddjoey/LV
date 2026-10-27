@@ -276,6 +276,14 @@ private:
 	void CreateShadowPipeline();
 	void CreateShadowMap(uint32_t resolution);
 	void CleanupShadowMap();
+	// A square depth array for shadows, one framebuffer per layer, bound at binding in set 2.
+	void CreateDepthLayers(uint32_t resolution, uint32_t layers, uint32_t binding, vk::Image& image, vk::DeviceMemory& memory,
+		vk::ImageView& arrayView, std::vector<vk::ImageView>& layerViews, std::vector<vk::Framebuffer>& framebuffers);
+	void DestroyDepthLayers(vk::Image& image, vk::DeviceMemory& memory, vk::ImageView& arrayView, std::vector<vk::ImageView>& layerViews,
+		std::vector<vk::Framebuffer>& framebuffers);
+	// One layer per shadowed point light, at its own resolution (0 or 1: off).
+	void CreateLightShadowMaps(uint32_t resolution);
+	void CleanupLightShadowMaps();
 	void CleanupSceneResources();
 
 	// DLSS upscaling (GraphicsUpscaling.cpp)
@@ -430,6 +438,14 @@ private:
 	std::vector<vk::ImageView> m_shadowLayerViews = {};
 	std::vector<vk::Framebuffer> m_shadowFramebuffers = {};
 	vk::Sampler m_shadowSampler = {};
+
+	// Shadowed point lights: one depth layer each
+	uint32_t m_lightShadowResolution = 0;
+	vk::Image m_lightShadowImage = {};
+	vk::DeviceMemory m_lightShadowImageMemory = {};
+	vk::ImageView m_lightShadowArrayView = {};
+	std::vector<vk::ImageView> m_lightShadowLayerViews = {};
+	std::vector<vk::Framebuffer> m_lightShadowFramebuffers = {};
 	bool m_depthClampSupported = false;
 
 	// DLSS: the scene renders into the colour, motion and depth targets at the render size, DLSS

@@ -1081,10 +1081,10 @@ void Graphics::CreateDescriptorPool(const uint32_t& numOfTextures)
 		.descriptorCount = static_cast<uint32_t>(m_maxFramesInFlight)
 	};
 
-	// Textures, plus one shadow map per scene set.
+	// Textures, plus the sun and lamp shadow maps in each scene set.
 	vk::DescriptorPoolSize texturePoolSize {
 		.type = vk::DescriptorType::eCombinedImageSampler,
-		.descriptorCount = numOfTextures + static_cast<uint32_t>(m_maxFramesInFlight)
+		.descriptorCount = numOfTextures + static_cast<uint32_t>(m_maxFramesInFlight) * 2
 	};
 
 	vk::DescriptorPoolSize sceneUBOPoolSize {

@@ -28,6 +28,13 @@ public:
 	// Called every frame, after the engine's own debug window, for game UI.
 	void SetGUICallback(const std::function<void()>& callback);
 
+	// The engine's debug panels (performance, cameras, objects), drawn into the current ImGui
+	// window, so a game can put them in a menu of its own.
+	void DrawDebugContents();
+	// Turns the built-in "Lordi" window and its Home key on or off (on by default). A game that
+	// shows DrawDebugContents itself turns it off.
+	void SetDebugWindowEnabled(bool enabled);
+
 	void RecordCommandBuffer(const vk::CommandBuffer& commandBuffer);
 
 	void Cleanup();
@@ -36,6 +43,7 @@ private:
 	void CreateDescriptorPool();
 	vk::DescriptorPool						m_descriptorPool = {};
 	bool									m_showIMGUI = false; // debug window; HOME toggles it
+	bool									m_debugWindowEnabled = true;
 	std::function<void()>					m_guiCallback = nullptr;
 
 	std::shared_ptr<Graphics>				m_graphics = nullptr;
