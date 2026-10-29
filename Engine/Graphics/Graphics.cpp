@@ -492,22 +492,15 @@ void Graphics::CreateGraphicsPipeline()
 {
 	LOG_INFO("Creating graphics pipeline...");
 
-	std::vector<vk::DescriptorSetLayout> descriptorSetLayouts = { m_dynamicUBODescriptorSetLayout, m_samplerDescriptorSetLayout, m_sceneDescriptorSetLayout };
+	std::vector<vk::DescriptorSetLayout> descriptorSetLayouts = { m_instanceDescriptorSetLayout, m_samplerDescriptorSetLayout, m_sceneDescriptorSetLayout };
 
-	vk::PushConstantRange objectConstants {
-		.stageFlags = vk::ShaderStageFlagBits::eFragment,
-		.offset = 0,
-		.size = sizeof(ObjectPushConstants)
-	};
-
-	std::vector<vk::PushConstantRange> pushConstants = { objectConstants };
-
+	// Each object's values are in the instance buffer (set 0), so there are no push constants.
 	vk::PipelineLayoutCreateInfo pipelineLayoutInfo{
 		.flags = {},
 		.setLayoutCount = static_cast<uint32_t>(descriptorSetLayouts.size()),
 		.pSetLayouts = descriptorSetLayouts.data(),
-		.pushConstantRangeCount = static_cast<uint32_t>(pushConstants.size()),
-		.pPushConstantRanges = pushConstants.data()
+		.pushConstantRangeCount = 0,
+		.pPushConstantRanges = nullptr
 	};
 	if (m_logicalDevice.createPipelineLayout(&pipelineLayoutInfo, nullptr, &m_pipelineLayout) != vk::Result::eSuccess)
 		throw std::runtime_error("failed to create pipeline layout!");
@@ -985,12 +978,12 @@ void Graphics::CreateDescriptorSetLayout(const uint32_t& numOfTextures)
 {
 	LOG_INFO("Creating descriptor set layout...");
 
-	vk::DescriptorSetLayoutBinding dynamicUBO {
-		.binding = 0,
-		.descriptorType = vk::DescriptorType::eUniformBufferDynamic,
-		.descriptorCount = 1,
-		.stageFlags = vk::ShaderStageFlagBits::eVertex,
-		.pImmutableSamplers = nullptr
+	// Set 0: every object's instance data, and the draw list each draw picks its objects from.
+	std::array<vk::DescriptorSetLayoutBinding, 2> instanceBindings = {
+		vk::DescriptorSetLayoutBinding { .binding = 0, .descriptorType = vk::DescriptorType::eStorageBuffer, .descriptorCount = 1,
+			.stageFlags = vk::ShaderStageFlagBits::eVertex },
+		vk::DescriptorSetLayoutBinding { .binding = 1, .descriptorType = vk::DescriptorType::eStorageBuffer, .descriptorCount = 1,
+			.stageFlags = vk::ShaderStageFlagBits::eVertex }
 	};
 
 	vk::DescriptorSetLayoutBinding combinedSampler {
@@ -1009,9 +1002,9 @@ void Graphics::CreateDescriptorSetLayout(const uint32_t& numOfTextures)
 		.pBindingFlags = bindingFlags.data()
 	};
 
-	vk::DescriptorSetLayoutCreateInfo dynamicUBOLayoutCreateInfo {
-		.bindingCount = 1,
-		.pBindings = &dynamicUBO
+	vk::DescriptorSetLayoutCreateInfo instanceLayoutCreateInfo {
+		.bindingCount = static_cast<uint32_t>(instanceBindings.size()),
+		.pBindings = instanceBindings.data()
 	};
 
 	vk::DescriptorSetLayoutCreateInfo samplerLayoutCreateInfo {
@@ -1020,8 +1013,8 @@ void Graphics::CreateDescriptorSetLayout(const uint32_t& numOfTextures)
 		.pBindings = &combinedSampler
 	};
 
-	if (m_logicalDevice.createDescriptorSetLayout(&dynamicUBOLayoutCreateInfo, nullptr, &m_dynamicUBODescriptorSetLayout) != vk::Result::eSuccess)
-		throw std::runtime_error("Failed to create descriptor set layout for UBO!");
+	if (m_logicalDevice.createDescriptorSetLayout(&instanceLayoutCreateInfo, nullptr, &m_instanceDescriptorSetLayout) != vk::Result::eSuccess)
+		throw std::runtime_error("Failed to create descriptor set layout for the instance buffers!");
 
 	if (m_logicalDevice.createDescriptorSetLayout(&samplerLayoutCreateInfo, nullptr, &m_samplerDescriptorSetLayout) != vk::Result::eSuccess)
 		throw std::runtime_error("Failed to create descriptor set layout for sampler!");
@@ -1029,56 +1022,33 @@ void Graphics::CreateDescriptorSetLayout(const uint32_t& numOfTextures)
 	LOG_SUCCESS("Successfully created descriptor set layout!");
 }
 
-void Graphics::CreateDynamicUniformBuffers()
+void Graphics::CreateInstanceBuffers()
 {
-	LOG_INFO("Creating uniform buffers...");
+	LOG_INFO("Creating instance buffers...");
 
-	vk::DeviceSize minAlignment = m_physicalDeviceProps.limits.minUniformBufferOffsetAlignment - 1;
-	m_alignedUBOSize = (sizeof(UniformBuffer) + minAlignment) & ~minAlignment;
+	auto create = [&](vk::DeviceSize size, std::vector<vk::Buffer>& buffers, std::vector<vk::DeviceMemory>& memories, std::vector<void*>& mapped) {
+		buffers = std::vector<vk::Buffer>(m_maxFramesInFlight);
+		memories = std::vector<vk::DeviceMemory>(m_maxFramesInFlight);
+		mapped = std::vector<void*>(m_maxFramesInFlight);
+		for (size_t i = 0; i < m_maxFramesInFlight; i++)
+		{
+			buffers[i] = CreateBuffer(size, vk::BufferUsageFlagBits::eStorageBuffer,
+				vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, memories[i], true);
+			if (m_logicalDevice.mapMemory(memories[i], 0, size, {}, &mapped[i]) != vk::Result::eSuccess)
+				throw std::runtime_error("failed to map an instance buffer!");
+		}
+	};
+	create(sizeof(InstanceData) * MAX_OBJECTS, m_instanceBuffers, m_instanceBuffersMemory, m_instanceBuffersMapped);
+	create(sizeof(uint32_t) * MAX_DRAW_ENTRIES, m_drawListBuffers, m_drawListBuffersMemory, m_drawListBuffersMapped);
 
-	m_dynamicUniformBufferObjectCount = MAX_OBJECTS;
-	m_dynamicUniformBufferSize = m_alignedUBOSize * m_dynamicUniformBufferObjectCount;
-
-	m_dynamicUniformBuffers = std::vector<vk::Buffer>(m_maxFramesInFlight);
-	m_dynamicUniformBuffersMemory = std::vector<vk::DeviceMemory>(m_maxFramesInFlight);
-	m_dynamicUniformBuffersMapped = std::vector<void*>(m_maxFramesInFlight);
-
-	for (size_t i = 0; i < m_maxFramesInFlight; i++)
-	{
-		m_dynamicUniformBuffers[i] = CreateBuffer(m_dynamicUniformBufferSize, vk::BufferUsageFlagBits::eUniformBuffer,
-			vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, m_dynamicUniformBuffersMemory[i], true);
-
-		if (m_logicalDevice.mapMemory(m_dynamicUniformBuffersMemory[i], 0, m_dynamicUniformBufferSize, {}, &m_dynamicUniformBuffersMapped[i]) != vk::Result::eSuccess)
-			throw std::runtime_error("failed to map user memory to uniform buffer!");
-	}
-
-	LOG_SUCCESS("Successfully created uniform buffers!");
-}
-
-void Graphics::UpdateUniformBuffer(uint32_t imageIndex)
-{
-	static auto startTime = std::chrono::high_resolution_clock::now();
-
-	auto currentTime = std::chrono::high_resolution_clock::now();
-	auto duration = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-
-	UniformBuffer ubo {};
-	ubo.model = glm::rotate(glm::mat4(1.f), duration * glm::radians(-90.f), glm::vec3(0.f, 0.f, 1.f));
-	ubo.view = glm::lookAt(glm::vec3(2.f, 2.f, 2.f), glm::vec3(0.f, 0.f, 0.f), glm::vec3(0.f, 0.f, 1.f));
-	ubo.proj = glm::perspective(glm::radians(45.f),
-		static_cast<float>(m_windowSurfaceCapabilities.currentExtent.width) / static_cast<float>(m_windowSurfaceCapabilities.currentExtent.width),
-		0.1f, 10.f);
-
-	ubo.proj[1][1] *= -1;
-
-	memcpy(m_dynamicUniformBuffersMapped[imageIndex], &ubo, sizeof(ubo));
+	LOG_SUCCESS("Successfully created instance buffers!");
 }
 
 void Graphics::CreateDescriptorPool(const uint32_t& numOfTextures)
 {
-	vk::DescriptorPoolSize dynamicUBOPoolSize {
-		.type = vk::DescriptorType::eUniformBufferDynamic,
-		.descriptorCount = static_cast<uint32_t>(m_maxFramesInFlight)
+	vk::DescriptorPoolSize instancePoolSize {
+		.type = vk::DescriptorType::eStorageBuffer,
+		.descriptorCount = static_cast<uint32_t>(m_maxFramesInFlight) * 2
 	};
 
 	// Textures, plus the sun and lamp shadow maps in each scene set.
@@ -1092,7 +1062,7 @@ void Graphics::CreateDescriptorPool(const uint32_t& numOfTextures)
 		.descriptorCount = static_cast<uint32_t>(m_maxFramesInFlight)
 	};
 
-	std::vector<vk::DescriptorPoolSize> poolSizes { dynamicUBOPoolSize, texturePoolSize, sceneUBOPoolSize };
+	std::vector<vk::DescriptorPoolSize> poolSizes { instancePoolSize, texturePoolSize, sceneUBOPoolSize };
 
 	vk::DescriptorPoolCreateInfo poolInfo {
 		.flags = vk::DescriptorPoolCreateFlagBits::eUpdateAfterBind,
@@ -1107,37 +1077,27 @@ void Graphics::CreateDescriptorPool(const uint32_t& numOfTextures)
 
 void Graphics::CreateDescriptorSets(const std::vector<vk::DescriptorImageInfo>& textureDescriptors)
 {
-	std::vector<vk::DescriptorSetLayout> dynamicUBODescriptorSetLayouts(m_maxFramesInFlight, m_dynamicUBODescriptorSetLayout);
-	vk::DescriptorSetAllocateInfo uboDescriptorSetAllocInfo {
+	std::vector<vk::DescriptorSetLayout> instanceDescriptorSetLayouts(m_maxFramesInFlight, m_instanceDescriptorSetLayout);
+	vk::DescriptorSetAllocateInfo instanceDescriptorSetAllocInfo {
 		.descriptorPool = m_graphicsDescriptorPool,
 		.descriptorSetCount = static_cast<uint32_t>(m_maxFramesInFlight),
-		.pSetLayouts = dynamicUBODescriptorSetLayouts.data()
+		.pSetLayouts = instanceDescriptorSetLayouts.data()
 	};
 
-	m_dynamicUBODescriptorSets = std::vector<vk::DescriptorSet>(m_maxFramesInFlight);
-	if (m_logicalDevice.allocateDescriptorSets(&uboDescriptorSetAllocInfo, m_dynamicUBODescriptorSets.data()) != vk::Result::eSuccess)
+	m_instanceDescriptorSets = std::vector<vk::DescriptorSet>(m_maxFramesInFlight);
+	if (m_logicalDevice.allocateDescriptorSets(&instanceDescriptorSetAllocInfo, m_instanceDescriptorSets.data()) != vk::Result::eSuccess)
 		throw std::runtime_error("Failed to allocate descriptor sets!");
 
 	for (size_t i = 0; i < m_maxFramesInFlight; i++)
 	{
-		vk::DescriptorBufferInfo dynamicUBOInfo {
-			.buffer = m_dynamicUniformBuffers[i],
-			.offset = 0,
-			.range = sizeof(UniformBuffer)
+		vk::DescriptorBufferInfo instanceInfo { .buffer = m_instanceBuffers[i], .offset = 0, .range = VK_WHOLE_SIZE };
+		vk::DescriptorBufferInfo drawListInfo { .buffer = m_drawListBuffers[i], .offset = 0, .range = VK_WHOLE_SIZE };
+		std::vector<vk::WriteDescriptorSet> descriptorWrites {
+			vk::WriteDescriptorSet { .dstSet = m_instanceDescriptorSets[i], .dstBinding = 0, .dstArrayElement = 0, .descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eStorageBuffer, .pBufferInfo = &instanceInfo },
+			vk::WriteDescriptorSet { .dstSet = m_instanceDescriptorSets[i], .dstBinding = 1, .dstArrayElement = 0, .descriptorCount = 1,
+				.descriptorType = vk::DescriptorType::eStorageBuffer, .pBufferInfo = &drawListInfo }
 		};
-
-		vk::WriteDescriptorSet dynamicUBODescWrite {
-			.dstSet = m_dynamicUBODescriptorSets[i],
-			.dstBinding = 0,
-			.dstArrayElement = 0,
-			.descriptorCount = 1,
-			.descriptorType = vk::DescriptorType::eUniformBufferDynamic,
-			.pImageInfo = nullptr,
-			.pBufferInfo = &dynamicUBOInfo,
-			.pTexelBufferView = nullptr
-		};
-
-		std::vector<vk::WriteDescriptorSet> descriptorWrites { dynamicUBODescWrite };
 		
 		m_logicalDevice.updateDescriptorSets(static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
 	}
@@ -1979,7 +1939,7 @@ void Graphics::CleanupVulkan()
 
 	m_logicalDevice.destroyDescriptorPool(m_graphicsDescriptorPool, nullptr);
 
-	m_logicalDevice.destroyDescriptorSetLayout(m_dynamicUBODescriptorSetLayout, nullptr);
+	m_logicalDevice.destroyDescriptorSetLayout(m_instanceDescriptorSetLayout, nullptr);
 	m_logicalDevice.destroyDescriptorSetLayout(m_samplerDescriptorSetLayout, nullptr);
 
 	m_logicalDevice.destroyPipeline(m_pipelineGraphics, nullptr);

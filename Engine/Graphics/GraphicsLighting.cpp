@@ -240,8 +240,7 @@ void Graphics::CreateShadowPipeline()
 		.pDynamicStates = dynamicStates.data()
 	};
 
-	// The model matrix comes from the same dynamic uniform buffer as the main pass; the cascade's
-	// light matrix is a push constant.
+	// The light's matrix is a push constant; the objects' come from the instance buffer (set 0).
 	vk::PushConstantRange pushConstant {
 		.stageFlags = vk::ShaderStageFlagBits::eVertex,
 		.offset = 0,
@@ -249,7 +248,7 @@ void Graphics::CreateShadowPipeline()
 	};
 	vk::PipelineLayoutCreateInfo layoutInfo {
 		.setLayoutCount = 1,
-		.pSetLayouts = &m_dynamicUBODescriptorSetLayout,
+		.pSetLayouts = &m_instanceDescriptorSetLayout,
 		.pushConstantRangeCount = 1,
 		.pPushConstantRanges = &pushConstant
 	};

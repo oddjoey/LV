@@ -25,25 +25,25 @@
 			return s_instance;										\
 		}
 
-struct UniformBuffer
+// One object's slot in the instance buffer the scene shaders read (std430): where it is now and was
+// last frame, and how it's shaded. Layout must match InstanceData in instance_data.glsl.
+struct InstanceData
 {
 	glm::mat4 model;
-	glm::mat4 view;
-	glm::mat4 proj;
 	glm::mat4 previousModel;	// last frame's, for motion vectors
-};
-
-// Per-draw values for the fragment shader. Layout must match PushData in shader.frag.
-struct ObjectPushConstants
-{
 	glm::vec4 tint;
 	float emissive;
 	uint32_t textureIndex;
-	uint32_t shading;	// ObjectShading
+	uint32_t shading;			// ObjectShading
+	uint32_t padding;
 };
+static_assert(sizeof(InstanceData) == 160, "InstanceData must match the shaders' std430 layout.");
 
-// Objects beyond this many have no uniform buffer slot and are not drawn.
-constexpr uint32_t MAX_OBJECTS = 1024;
+// Objects beyond this many have no instance slot and are not drawn.
+constexpr uint32_t MAX_OBJECTS = 8192;
+// How many slots the frame's passes can list between them: the main pass and every shadow map. A
+// draw instances a run of these, one per object of the same model.
+constexpr uint32_t MAX_DRAW_ENTRIES = MAX_OBJECTS * 16;
 
 namespace Utility
 {

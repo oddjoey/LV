@@ -29,8 +29,8 @@ public:
 	void SetGUICallback(const std::function<void()>& callback);
 
 	// The engine's debug panels (performance, cameras, objects), drawn into the current ImGui
-	// window, so a game can put them in a menu of its own.
-	void DrawDebugContents();
+	// window, so a game can put them in a menu of its own. The performance figures can be left out.
+	void DrawDebugContents(bool showPerformance = true);
 	// Turns the built-in "Lordi" window and its Home key on or off (on by default). A game that
 	// shows DrawDebugContents itself turns it off.
 	void SetDebugWindowEnabled(bool enabled);

@@ -18,6 +18,8 @@ public:
 	uint32_t GetModelCount() const;
 	// index as returned by Model::GetIndex (1-based); nullptr if out of range.
 	pModel GetModel(const uint32_t& index) const;
+	// The same without a reference count, for loops over every object: valid while the model is loaded.
+	const Model* PeekModel(uint32_t index) const;
 	std::vector<std::string> GetModelNames() const;
 private:
 

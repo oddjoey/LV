@@ -249,9 +249,9 @@ private:
 	// Buffer helper functions
 	uint32_t FindMemoryTypeIndex(uint32_t memoryType, vk::MemoryPropertyFlags memoryProperties);
 
-	// Uniform buffers
-	void CreateDynamicUniformBuffers();
-	void UpdateUniformBuffer(uint32_t currentImage);
+	// Every object's instance data, and the lists of objects each pass draws (one of each per frame in
+	// flight): what the scene and shadow shaders read.
+	void CreateInstanceBuffers();
 
 	// Descriptors
 	void CreateDescriptorSetLayout(const uint32_t& numOfTextures);
@@ -388,19 +388,19 @@ private:
 	// Command buffers
 	std::vector<vk::CommandBuffer> m_commandBuffers = {};
 
-	// Uniform buffers
-	std::vector<vk::Buffer> m_dynamicUniformBuffers = {};
-	vk::DeviceSize m_dynamicUniformBufferSize = {};
-	std::vector<vk::DeviceMemory> m_dynamicUniformBuffersMemory = {};
-	std::vector<void*> m_dynamicUniformBuffersMapped = {};
-	uint32_t m_dynamicUniformBufferObjectCount = 0;
-	vk::DeviceSize m_alignedUBOSize;
+	// Instance data (InstanceData, MAX_OBJECTS slots) and draw lists (MAX_DRAW_ENTRIES slot numbers)
+	std::vector<vk::Buffer> m_instanceBuffers = {};
+	std::vector<vk::DeviceMemory> m_instanceBuffersMemory = {};
+	std::vector<void*> m_instanceBuffersMapped = {};
+	std::vector<vk::Buffer> m_drawListBuffers = {};
+	std::vector<vk::DeviceMemory> m_drawListBuffersMemory = {};
+	std::vector<void*> m_drawListBuffersMapped = {};
 
 	// Descriptor sets
 	vk::DescriptorPool m_graphicsDescriptorPool = {};
-	vk::DescriptorSetLayout m_dynamicUBODescriptorSetLayout = {};
+	vk::DescriptorSetLayout m_instanceDescriptorSetLayout = {};
 	vk::DescriptorSetLayout m_samplerDescriptorSetLayout = {};
-	std::vector<vk::DescriptorSet> m_dynamicUBODescriptorSets = {};
+	std::vector<vk::DescriptorSet> m_instanceDescriptorSets = {};
 	vk::DescriptorSet m_samplerDescriptorSet = {};
 
 	// Depth

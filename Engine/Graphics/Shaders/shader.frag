@@ -14,13 +14,12 @@ layout(set = 2, binding = 1) uniform sampler2DArrayShadow shadowMap;
 // One layer per shadowed point light.
 layout(set = 2, binding = 2) uniform sampler2DArrayShadow lightShadowMaps;
 
-// Must match ObjectPushConstants in Utility.h.
-layout(push_constant) uniform PushData {
-    vec4 tint;
-    float emissive;
-    uint textureIndex;
-    uint shading;           // 0 lit, 1 unlit, 2 sky
-};
+// The object's own shading, from its instance data (see shader.vert).
+layout(location = 6) flat in vec4 tint;
+layout(location = 7) flat in uvec2 fragTextureShading;
+layout(location = 8) flat in float emissive;
+#define textureIndex fragTextureShading.x
+#define shading fragTextureShading.y       // 0 lit, 1 unlit, 2 sky
 
 layout(location = 0) out vec4 outColor;
 #ifdef MOTION_VECTORS
@@ -54,9 +53,11 @@ vec3 SkyColor(vec3 direction) {
 }
 
 bool Inside(vec3 position) {
-    return scene.interiorAmbient.w > 0.5
-        && all(greaterThan(position, scene.interiorMin.xyz))
-        && all(lessThan(position, scene.interiorMax.xyz));
+    int count = int(scene.interiorAmbient.w + 0.5);
+    for (int i = 0; i < count; i++)
+        if (all(greaterThan(position, scene.interiorMin[i].xyz)) && all(lessThan(position, scene.interiorMax[i].xyz)))
+            return true;
+    return false;
 }
 
 // 3x3 taps of the hardware 2x2 comparison filter.

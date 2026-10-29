@@ -83,6 +83,13 @@ pModel ModelManager::GetModel(const uint32_t& index) const
 	return m_models[index - 1];
 }
 
+const Model* ModelManager::PeekModel(uint32_t index) const
+{
+	if (index == 0 || index > m_models.size())
+		return nullptr;
+	return m_models[index - 1].get();
+}
+
 std::vector<std::string> ModelManager::GetModelNames() const
 {
 	std::vector<std::string> names(m_models.size() + 1);

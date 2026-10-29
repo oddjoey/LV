@@ -3,6 +3,7 @@
 const int MAX_POINT_LIGHTS = 32;
 const int SHADOW_CASCADES = 2;
 const int MAX_SHADOWED_LIGHTS = 8;
+const int MAX_INTERIORS = 4;
 layout(set = 2, binding = 0) uniform SceneData {
     mat4 lightViewProj[SHADOW_CASCADES];
     vec4 shadowParams;      // xy: shadow texel size in metres per cascade, z: shadows on, w: 1 / resolution
@@ -12,9 +13,9 @@ layout(set = 2, binding = 0) uniform SceneData {
     vec4 skyZenith;
     vec4 skyHorizon;
     vec4 groundColor;
-    vec4 interiorAmbient;   // w: 1 if there is an interior
-    vec4 interiorMin;
-    vec4 interiorMax;
+    vec4 interiorAmbient;   // w: how many interiors there are
+    vec4 interiorMin[MAX_INTERIORS];
+    vec4 interiorMax[MAX_INTERIORS];
     vec4 fogColor;          // w: density
     ivec4 lightCount;
     vec4 lightPositionRange[MAX_POINT_LIGHTS];
@@ -23,4 +24,6 @@ layout(set = 2, binding = 0) uniform SceneData {
     vec4 renderParams;      // xy: this frame's jitter in clip space, z: texture LOD bias
     mat4 lightShadowViewProj[MAX_SHADOWED_LIGHTS];
     vec4 lightShadow[MAX_POINT_LIGHTS];   // x: shadow map layer or -1, y: shadow texel size per metre of distance, z: 1 / resolution
+    mat4 view;
+    mat4 proj;              // with this frame's jitter
 } scene;

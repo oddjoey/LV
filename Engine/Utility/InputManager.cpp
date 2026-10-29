@@ -4,11 +4,13 @@ CLASS_SINGLETON_SOURCE(InputManager)
 
 std::shared_ptr<Graphics> InputManager::m_graphics = nullptr;
 std::shared_ptr<IMGUIManager> InputManager::m_imguiManager = nullptr;
+double InputManager::m_scrollAccumulated = 0.0;
 
 InputManager::InputManager()
 {
 	m_graphics = Graphics::Get();
 	glfwSetKeyCallback(m_graphics->m_window, KeyCallback);
+	glfwSetScrollCallback(m_graphics->m_window, ScrollCallback);
 	m_imguiManager = IMGUIManager::Get();
 }
 
@@ -39,8 +41,18 @@ void InputManager::KeyCallback(GLFWwindow* window, int key, int scancode, int ac
 	}
 }
 
+void InputManager::ScrollCallback(GLFWwindow* window, double xOffset, double yOffset)
+{
+	// Like the key callback, this replaced ImGui's own, so it's passed on.
+	ImGui_ImplGlfw_ScrollCallback(window, xOffset, yOffset);
+	m_scrollAccumulated += yOffset;
+}
+
 void InputManager::Update()
 {
+	m_scrollDelta = static_cast<float>(m_scrollAccumulated);
+	m_scrollAccumulated = 0.0;
+
 	m_previousKeys = m_keys;
 	for (int key = GLFW_KEY_SPACE; key <= GLFW_KEY_LAST; key++)
 		m_keys[key] = glfwGetKey(m_graphics->m_window, key) == GLFW_PRESS;
@@ -81,6 +93,11 @@ bool InputManager::WasMouseButtonPressed(const int& button) const
 glm::vec2 InputManager::GetMouseDelta() const
 {
 	return m_mouseDelta;
+}
+
+float InputManager::GetScrollDelta() const
+{
+	return m_scrollDelta;
 }
 
 void InputManager::SetCursorLocked(const bool& locked)

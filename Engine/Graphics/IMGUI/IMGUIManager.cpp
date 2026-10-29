@@ -114,11 +114,11 @@ void IMGUIManager::SetDebugWindowEnabled(bool enabled)
 		m_showIMGUI = false;
 }
 
-void IMGUIManager::DrawDebugContents()
+void IMGUIManager::DrawDebugContents(bool showPerformance)
 {
 	{
 		{
-			if (ImGui::CollapsingHeader("Performance"))
+			if (showPerformance && ImGui::CollapsingHeader("Performance"))
 			{
 				ImGui::Text("FPS: %f", m_performanceManager->GetFPS());
 				ImGui::Text("Graphics Command Buffer Duration: %fms", m_performanceManager->GetGraphicsCommandBufferDuration().count());
@@ -251,9 +251,6 @@ void IMGUIManager::DrawDebugContents()
 							ImGui::PushStyleColor(ImGuiCol_ButtonActive, (ImVec4)ImColor::HSV(0.f, 0.8f, 0.8f));
 							if (ImGui::Button("Delete Object"))
 							{
-								uint32_t dynamicOffset = (object->GetIndex()) * static_cast<uint32_t>(m_graphics->m_alignedUBOSize);
-								uint32_t* dst = reinterpret_cast<uint32_t*>(m_graphics->m_dynamicUniformBuffersMapped[m_graphics->m_frameInFlightIndex]) + dynamicOffset;
-								memset(dst, 0, sizeof(UniformBuffer));
 								m_objectManager->RemoveObject(object);
 
 							}

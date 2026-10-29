@@ -9,6 +9,8 @@ constexpr int MAX_POINT_LIGHTS = 32;
 constexpr int SHADOW_CASCADES = 2;
 // Point lights that cast shadows get one shadow map each, up to this many per frame.
 constexpr int MAX_SHADOWED_LIGHTS = 8;
+// Enclosed spaces (buildings) with their own ambient and lights.
+constexpr int MAX_INTERIORS = 4;
 
 // Which fragments a point light reaches. Most lights aren't shadowed, so a lamp inside a building
 // is kept off the ground outside it (and a streetlight off the walls inside) this way instead.
@@ -42,10 +44,14 @@ struct SceneLighting
 	glm::vec3 skyZenith = { 0.25f, 0.42f, 0.75f };
 	glm::vec3 skyHorizon = { 0.65f, 0.74f, 0.85f };
 	glm::vec3 groundColor = { 0.20f, 0.19f, 0.16f };
-	// One enclosed space (a building) gets its own ambient and its own lights.
-	bool hasInterior = false;
-	glm::vec3 interiorMin = {};
-	glm::vec3 interiorMax = {};
+	// Enclosed spaces (a garage, a house) get their own ambient and their own lights. Up to
+	// MAX_INTERIORS boxes; a fragment in any of them is inside.
+	struct Interior
+	{
+		glm::vec3 min = {};
+		glm::vec3 max = {};
+	};
+	std::vector<Interior> interiors = {};
 	glm::vec3 interiorAmbient = { 0.18f, 0.18f, 0.19f };
 	glm::vec3 fogColor = { 0.65f, 0.74f, 0.85f };
 	float fogDensity = 0.f;		// per metre
@@ -70,9 +76,9 @@ struct SceneUniforms
 	glm::vec4 skyZenith;
 	glm::vec4 skyHorizon;
 	glm::vec4 groundColor;
-	glm::vec4 interiorAmbient;	// w: 1 if there is an interior
-	glm::vec4 interiorMin;
-	glm::vec4 interiorMax;
+	glm::vec4 interiorAmbient;	// w: how many interiors there are
+	glm::vec4 interiorMin[MAX_INTERIORS];
+	glm::vec4 interiorMax[MAX_INTERIORS];
 	glm::vec4 fogColor;			// w: density
 	glm::ivec4 lightCount;
 	glm::vec4 lightPositionRange[MAX_POINT_LIGHTS];
@@ -81,4 +87,6 @@ struct SceneUniforms
 	glm::vec4 renderParams;		// xy: this frame's jitter in clip space, z: texture LOD bias
 	glm::mat4 lightShadowViewProj[MAX_SHADOWED_LIGHTS];
 	glm::vec4 lightShadow[MAX_POINT_LIGHTS];	// x: shadow map layer or -1, y: shadow texel size per metre of distance, z: 1 / resolution
+	glm::mat4 view;
+	glm::mat4 proj;				// with this frame's jitter
 };

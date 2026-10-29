@@ -22,6 +22,9 @@ glm::vec3 Entity::GetPosition() const
 
 Entity* Entity::SetRotation(const glm::quat& newRotation)
 {
+	// Set every frame for a lot of things that aren't turning: skip the trig when nothing changed.
+	if (newRotation == m_rotation)
+		return this;
 	m_rotation = newRotation;
 	m_angles = glm::eulerAngles(newRotation);
 	return this;
@@ -55,10 +58,20 @@ glm::vec3 Entity::GetAngles() const
 	return glm::degrees(glm::eulerAngles(m_rotation));
 }
 
-glm::mat4 Entity::GetModelMatrix() const
+const glm::mat4& Entity::GetModelMatrix() const
 {
-	glm::mat4 translation = glm::translate(glm::mat4(1.f), m_position);
-	glm::mat4 rotation = glm::mat4_cast(m_rotation);
-	glm::mat4 scale = glm::scale(glm::mat4(1.f), m_scale);
-	return translation * rotation * scale;
+	if (m_matrixValid && m_position == m_matrixPosition && m_rotation == m_matrixRotation && m_scale == m_matrixScale)
+		return m_matrix;
+
+	// The rotation's columns scaled, and the translation: the same as T * R * S without the multiplies.
+	glm::mat3 rotation = glm::mat3_cast(m_rotation);
+	m_matrix[0] = glm::vec4(rotation[0] * m_scale.x, 0.f);
+	m_matrix[1] = glm::vec4(rotation[1] * m_scale.y, 0.f);
+	m_matrix[2] = glm::vec4(rotation[2] * m_scale.z, 0.f);
+	m_matrix[3] = glm::vec4(m_position, 1.f);
+	m_matrixPosition = m_position;
+	m_matrixRotation = m_rotation;
+	m_matrixScale = m_scale;
+	m_matrixValid = true;
+	return m_matrix;
 }

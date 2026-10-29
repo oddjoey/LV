@@ -90,6 +90,17 @@ bool Object::CastsShadows() const
 	return m_castsShadows;
 }
 
+Object* Object::SetCastsLampShadows(const bool& castsLampShadows)
+{
+	m_castsLampShadows = castsLampShadows;
+	return this;
+}
+
+bool Object::CastsLampShadows() const
+{
+	return m_castsLampShadows;
+}
+
 Object* Object::SetShading(const ObjectShading& shading)
 {
 	m_shading = shading;

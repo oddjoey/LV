@@ -39,6 +39,11 @@ public:
 
 	Object* SetCastsShadows(const bool& castsShadows);
 	bool CastsShadows() const;
+	// Whether it shows up in the point lights' shadow maps as well as the sun's (if it casts shadows at
+	// all). Off for something whose lamp shadow could never be seen, so moving it doesn't make every
+	// lamp near it redraw its map.
+	Object* SetCastsLampShadows(const bool& castsLampShadows);
+	bool CastsLampShadows() const;
 
 	Object* SetShading(const ObjectShading& shading);
 	ObjectShading GetShading() const;
@@ -54,6 +59,7 @@ private:
 	bool m_visible = true;
 	bool m_pickable = false;
 	bool m_castsShadows = true;
+	bool m_castsLampShadows = true;
 	ObjectShading m_shading = ObjectShading::LIT;
 };
 

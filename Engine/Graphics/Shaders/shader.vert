@@ -1,14 +1,7 @@
 #version 450
 #extension GL_GOOGLE_include_directive : require
 
-layout(set = 0, binding = 0) uniform UniformBufferObject
-{
-    mat4 model;
-    mat4 view;
-    mat4 proj;
-    mat4 previousModel;
-} ubo;
-
+#include "instance_data.glsl"
 #include "scene_data.glsl"
 
 layout(location = 0) in vec3 inPosition;
@@ -25,17 +18,25 @@ layout(location = 3) out vec3 fragWorldPosition;
 layout(location = 4) out vec4 fragClipPosition;
 layout(location = 5) out vec4 fragPreviousClipPosition;
 #endif
+// The object's own shading, the same across the whole of it.
+layout(location = 6) flat out vec4 fragTint;
+layout(location = 7) flat out uvec2 fragTextureShading;
+layout(location = 8) flat out float fragEmissive;
 
 void main() {
-    vec4 worldPosition = ubo.model * vec4(inPosition, 1.0);
-    gl_Position = ubo.proj * ubo.view * worldPosition;
+    InstanceData object = instances[slots[gl_InstanceIndex]];
+    vec4 worldPosition = object.model * vec4(inPosition, 1.0);
+    gl_Position = scene.proj * scene.view * worldPosition;
     fragColor = inColor;
     fragTexCoord = inTexCoord;
     // Good enough for the uniform and near-uniform scales the engine uses.
-    fragNormal = mat3(ubo.model) * inNormal;
+    fragNormal = mat3(object.model) * inNormal;
     fragWorldPosition = worldPosition.xyz;
 #ifdef MOTION_VECTORS
     fragClipPosition = gl_Position;
-    fragPreviousClipPosition = scene.previousViewProj * ubo.previousModel * vec4(inPosition, 1.0);
+    fragPreviousClipPosition = scene.previousViewProj * object.previousModel * vec4(inPosition, 1.0);
 #endif
+    fragTint = object.tint;
+    fragTextureShading = uvec2(object.textureIndex, object.shading);
+    fragEmissive = object.emissive;
 }

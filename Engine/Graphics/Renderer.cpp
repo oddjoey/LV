@@ -2,6 +2,27 @@
 
 CLASS_SINGLETON_SOURCE(Renderer)
 
+Renderer::Frustum::Frustum(const glm::mat4& m)
+{
+	// Gribb-Hartmann: each plane is the last row of the matrix plus or minus another. The near plane
+	// uses the -w <= z form, which also holds for 0-to-1 depth, just less tightly.
+	glm::vec4 rowX = { m[0][0], m[1][0], m[2][0], m[3][0] };
+	glm::vec4 rowY = { m[0][1], m[1][1], m[2][1], m[3][1] };
+	glm::vec4 rowZ = { m[0][2], m[1][2], m[2][2], m[3][2] };
+	glm::vec4 rowW = { m[0][3], m[1][3], m[2][3], m[3][3] };
+	planes = { rowW + rowX, rowW - rowX, rowW + rowY, rowW - rowY, rowW + rowZ };
+	for (auto& plane : planes)
+		plane /= (std::max)(glm::length(glm::vec3(plane)), 1e-6f);
+}
+
+bool Renderer::Frustum::Contains(const glm::vec3& center, float radius) const
+{
+	for (const auto& plane : planes)
+		if (glm::dot(glm::vec3(plane), center) + plane.w < -radius)
+			return false;
+	return true;
+}
+
 vk::CommandBuffer Renderer::RecordCommandBuffer(const uint32_t& imageIndex)
 {
 	auto commandBuffer = m_graphics->m_commandBuffers[m_graphics->m_frameInFlightIndex];
@@ -29,56 +50,97 @@ vk::CommandBuffer Renderer::RecordCommandBuffer(const uint32_t& imageIndex)
 	m_frameNumber++;
 
 	// Everything drawn this frame gets its matrices up front: the shadow and main passes share them.
+	// opaque holds every solid object (shadow casters can be out of view); the main pass draws only
+	// what's in front of the camera.
 	std::vector<DrawItem> opaque;
+	// Points into opaque, which is reserved for every object up front and so never moves.
+	std::vector<const DrawItem*> visibleOpaque;
 	std::vector<DrawItem> transparent;
+	std::vector<const DrawItem*> visibleTransparent;	// the same, furthest first
+	std::vector<glm::vec4> movedCasters;	// shadow casters that moved since last frame: centre and radius
+	opaque.reserve(MAX_OBJECTS);
+	visibleOpaque.reserve(MAX_OBJECTS);
+	// Every pass this frame lists the objects it draws in the draw list, from the start.
+	m_drawCursor = 0;
 	SceneUniforms scene = {};
+	glm::mat4 view = glm::mat4(1.f), jitteredProjection = glm::mat4(1.f);
 	if (camera)
 	{
 		glm::mat4 projection = glm::perspective(glm::radians(camera->GetFov()), aspect, camera->GetNearPlane(), camera->GetFarPlane());
 		projection[1][1] *= -1;
-		glm::mat4 view = camera->CalculateViewMatrix();
+		view = camera->CalculateViewMatrix();
 		glm::mat4 viewProj = projection * view;
 		if (resetHistory)
 			m_previousViewProj = viewProj;
 
-		UniformBuffer ubo {};
-		ubo.view = view;
-		ubo.proj = glm::translate(glm::mat4(1.f), glm::vec3(jitterClip, 0.f)) * projection;
+		jitteredProjection = glm::translate(glm::mat4(1.f), glm::vec3(jitterClip, 0.f)) * projection;
+		auto instances = static_cast<InstanceData*>(m_graphics->m_instanceBuffersMapped[frame]);
 		glm::vec3 cameraPosition = camera->GetPosition();
-		if (m_previousModels.size() < m_graphics->m_dynamicUniformBufferObjectCount)
-			m_previousModels.resize(m_graphics->m_dynamicUniformBufferObjectCount);
+		if (m_previousModels.size() < MAX_OBJECTS)
+			m_previousModels.resize(MAX_OBJECTS);
+		Frustum cameraView(viewProj);
 
 		for (auto& objectList : m_objectManager->GetObjectsByModel())
 		{
 			uint32_t modelIndex = objectList.first;
 			if (!modelIndex)
 				continue;
+			auto model = m_modelManger->GetModel(modelIndex);
+			glm::vec3 localCenter = model ? (model->GetBoundsMin() + model->GetBoundsMax()) * 0.5f : glm::vec3(0.f);
+			float localRadius = model ? glm::length(model->GetBoundsMax() - model->GetBoundsMin()) * 0.5f : 1000.f;
 
 			for (auto& object : objectList.second)
 			{
 				auto objectIndex = object->GetIndex();
-				if (!object->IsVisible() || objectIndex == 0 || objectIndex > m_graphics->m_dynamicUniformBufferObjectCount)
+				if (!object->IsVisible() || objectIndex == 0 || objectIndex > MAX_OBJECTS)
 					continue;
 
-				ubo.model = object->GetModelMatrix();
+				// Its slot in the instance buffer, filled here and copied in whole: the buffer is
+				// write-combined memory, slow to read back.
+				InstanceData instance;
+				instance.model = object->GetModelMatrix();
 				// Something that wasn't drawn last frame has no motion to report.
 				auto& previous = m_previousModels[objectIndex - 1];
-				ubo.previousModel = !resetHistory && previous.frame + 1 == m_frameNumber ? previous.matrix : ubo.model;
-				previous = { ubo.model, m_frameNumber };
+				bool moved = previous.frame + 1 != m_frameNumber || previous.matrix != instance.model;
+				instance.previousModel = !resetHistory && previous.frame + 1 == m_frameNumber ? previous.matrix : instance.model;
+				previous = { instance.model, m_frameNumber };
+				instance.tint = object->GetTint();
+				instance.emissive = object->GetEmissive();
+				instance.textureIndex = object->GetTextureIndex();
+				instance.shading = static_cast<uint32_t>(object->GetShading());
+				instance.padding = 0;
+				uint32_t slot = objectIndex - 1;
+				memcpy(instances + slot, &instance, sizeof(instance));
 
-				uint32_t dynamicOffset = (objectIndex - 1) * static_cast<uint32_t>(m_graphics->m_alignedUBOSize);
-				uint8_t* dst = reinterpret_cast<uint8_t*>(m_graphics->m_dynamicUniformBuffersMapped[frame]) + dynamicOffset;
-				memcpy(dst, &ubo, sizeof(ubo));
-
+				glm::vec3 scale = object->GetScale();
+				float scaleMax = (std::max)({ std::abs(scale.x), std::abs(scale.y), std::abs(scale.z) });
+				glm::vec3 center = glm::vec3(instance.model * glm::vec4(localCenter, 1.f));
 				glm::vec3 offset = object->GetPosition() - cameraPosition;
-				DrawItem item = { object, modelIndex, dynamicOffset, glm::dot(offset, offset) };
-				(object->IsTransparent() ? transparent : opaque).push_back(item);
+				DrawItem item = { object.get(), modelIndex, slot, glm::dot(offset, offset), center, localRadius * scaleMax, instance.model };
+				bool inView = cameraView.Contains(item.center, item.radius);
+				if (object->IsTransparent())
+				{
+					if (inView)
+						transparent.push_back(item);
+				}
+				else
+				{
+					opaque.push_back(item);
+					if (moved && object->CastsShadows() && object->CastsLampShadows())
+						movedCasters.push_back(glm::vec4(item.center, item.radius));
+					if (inView)
+						visibleOpaque.push_back(&opaque.back());
+				}
 			}
 		}
 		std::sort(transparent.begin(), transparent.end(), [](const DrawItem& a, const DrawItem& b) { return a.distance > b.distance; });
+		for (const auto& item : transparent)
+			visibleTransparent.push_back(&item);
 
 		WriteSceneUniforms(*camera, aspect, scene);
 		scene.previousViewProj = m_previousViewProj;
+		scene.view = view;
+		scene.proj = jitteredProjection;
 		// Textures sharp enough for the window's size, not the smaller render size (NVIDIA's advice).
 		float lodBias = upscaling ? std::log2(static_cast<float>(renderExtent.width) / static_cast<float>(extent.width)) - 1.f : 0.f;
 		scene.renderParams = glm::vec4(jitterClip, lodBias, 0.f);
@@ -90,8 +152,64 @@ vk::CommandBuffer Renderer::RecordCommandBuffer(const uint32_t& imageIndex)
 
 	// One depth-only pass into a shadow map layer, drawing the solid lit objects that cast shadows
 	// (and, for lamps, only those that can be within reach).
+	// minRadius drops casters too small to show up in that map at all. With cachedHash, the map is
+	// only redrawn when something in it has moved (or come or gone): it keeps its contents otherwise.
+	// Everything that can cast a shadow at all, picked out once for every pass this frame.
+	std::vector<const DrawItem*> shadowCasters;
+	shadowCasters.reserve(opaque.size());
+	for (const auto& item : opaque)
+		if (item.object->CastsShadows() && item.object->GetShading() == ObjectShading::LIT)
+			shadowCasters.push_back(&item);
+	std::vector<const DrawItem*> casters;
+	casters.reserve(opaque.size());
 	auto shadowPass = [&](const vk::Framebuffer& framebuffer, uint32_t resolution, const glm::mat4& lightViewProj,
-		const glm::vec3* lampPosition, float reach) {
+		const glm::vec3* lampPosition, float reach, float minRadius, uint64_t* cachedHash) {
+		Frustum lightView(lightViewProj);
+		casters.clear();
+		for (const auto* item : shadowCasters)
+		{
+			if (item->radius < minRadius)
+				continue;
+			if (lampPosition)
+			{
+				if (!item->object->CastsLampShadows())
+					continue;
+				glm::vec3 away = item->center - *lampPosition;
+				float limit = reach + item->radius;
+				if (glm::dot(away, away) > limit * limit)
+					continue;
+			}
+			// Out of the light's view: it can't cast into this map.
+			if (!lightView.Contains(item->center, item->radius))
+				continue;
+			casters.push_back(item);
+		}
+
+		if (cachedHash)
+		{
+			// An FNV-style hash, a 64-bit word at a time, over what each caster is and where (its model
+			// matrix holds position, rotation and scale).
+			uint64_t hash = 1469598103934665603ull;
+			auto mix = [&](const void* data, size_t size) {
+				auto words = static_cast<const uint64_t*>(data);
+				for (size_t i = 0; i < size / sizeof(uint64_t); i++)
+				{
+					hash = (hash ^ words[i]) * 1099511628211ull;
+					hash ^= hash >> 29;
+				}
+			};
+			mix(&lightViewProj, sizeof(lightViewProj));
+			for (const auto* item : casters)
+			{
+				uint64_t identity[2] = { reinterpret_cast<uint64_t>(item->object), item->modelIndex };
+				mix(identity, sizeof(identity));
+				mix(&item->model, sizeof(item->model));
+			}
+			if (hash == *cachedHash)
+				return;
+			*cachedHash = hash;
+		}
+
 		vk::Viewport shadowViewport { 0.f, 0.f, static_cast<float>(resolution), static_cast<float>(resolution), 0.f, 1.f };
 		vk::Rect2D shadowScissor { { 0, 0 }, { resolution, resolution } };
 		vk::ClearValue clearShadow = { .depthStencil = { 1.f, 0 } };
@@ -108,31 +226,45 @@ vk::CommandBuffer Renderer::RecordCommandBuffer(const uint32_t& imageIndex)
 		commandBuffer.setScissor(0, 1, &shadowScissor);
 		commandBuffer.bindVertexBuffers(0, 1, &m_modelManger->m_vertexBuffer, &vertexOffset);
 		commandBuffer.bindIndexBuffer(m_modelManger->m_indexBuffer, 0, vk::IndexType::eUint32);
+		commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_graphics->m_shadowPipelineLayout, 0, 1,
+			&m_graphics->m_instanceDescriptorSets[frame], 0, nullptr);
 		commandBuffer.pushConstants(m_graphics->m_shadowPipelineLayout, vk::ShaderStageFlagBits::eVertex, 0, sizeof(glm::mat4), &lightViewProj);
-
-		for (const auto& item : opaque)
-		{
-			if (!item.object->CastsShadows() || item.object->GetShading() != ObjectShading::LIT)
-				continue;
-			if (lampPosition && glm::distance(item.object->GetPosition(), *lampPosition) > reach)
-				continue;
-			commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_graphics->m_shadowPipelineLayout, 0, 1,
-				&m_graphics->m_dynamicUBODescriptorSets[frame], 1, &item.dynamicOffset);
-			commandBuffer.drawIndexed(m_modelManger->m_indicesCounts[item.modelIndex - 1], 1, m_modelManger->m_indicesOffsets[item.modelIndex - 1],
-				static_cast<uint32_t>(m_modelManger->m_verticesOffsets[item.modelIndex - 1]), 0);
-		}
+		DrawInstanced(commandBuffer, casters);
 		commandBuffer.endRenderPass();
 	};
 
 	// Sun shadows: one pass per cascade.
+	if (m_cascadeShadowCacheImage != m_graphics->m_shadowImage)
+	{
+		m_cascadeShadowHashes.fill(0);
+		m_cascadeShadowCacheImage = m_graphics->m_shadowImage;
+	}
 	if (camera && scene.shadowParams.z > 0.5f)
 		for (int cascade = 0; cascade < SHADOW_CASCADES; cascade++)
-			shadowPass(m_graphics->m_shadowFramebuffers[cascade], m_graphics->m_shadowResolution, scene.lightViewProj[cascade], nullptr, 0.f);
+		{
+			// In the coarse cascade, a part smaller than a couple of shadow texels casts nothing visible.
+			float texel = cascade == 0 ? scene.shadowParams.x : scene.shadowParams.y;
+			shadowPass(m_graphics->m_shadowFramebuffers[cascade], m_graphics->m_shadowResolution, scene.lightViewProj[cascade], nullptr, 0.f,
+				cascade == 0 ? 0.f : texel, &m_cascadeShadowHashes[cascade]);
+		}
 
-	// Lamp shadows: one pass per shadowed light. Objects are culled by their origin, so the reach
-	// allows for big ones (a machine, the car) whose origin is outside the light's range.
+	// Lamp shadows: one pass per shadowed light, by each caster's bounding sphere. Lamps don't move,
+	// so a lamp's map is kept from frame to frame and only redrawn when what it sees changes. A new
+	// shadow image (quality changed) starts the cache over.
 	if (camera)
 	{
+		if (m_lampShadowCacheImage != m_graphics->m_lightShadowImage)
+		{
+			m_lampShadowHashes.fill(0);
+			m_lampShadowCacheImage = m_graphics->m_lightShadowImage;
+		}
+		// A lamp's map only needs looking at again when a caster has come or gone, or one has moved within
+		// its reach. Most frames, none has, and the per-lamp work below is skipped altogether.
+		uint64_t casterSet = 1469598103934665603ull;
+		for (const auto* item : shadowCasters)
+			casterSet = (casterSet ^ reinterpret_cast<uint64_t>(item->object)) * 1099511628211ull;
+		bool casterSetChanged = casterSet != m_lastShadowCasters;
+		m_lastShadowCasters = casterSet;
 		int count = (std::min)(static_cast<int>(m_lighting.pointLights.size()), MAX_POINT_LIGHTS);
 		for (int i = 0; i < count; i++)
 		{
@@ -140,8 +272,24 @@ vk::CommandBuffer Renderer::RecordCommandBuffer(const uint32_t& imageIndex)
 			if (scene.lightShadow[i].x < 0.f)
 				continue;
 			const auto& light = m_lighting.pointLights[i];
+			if (!casterSetChanged && m_lampShadowHashes[layer] != 0)
+			{
+				bool touched = false;
+				for (const auto& sphere : movedCasters)
+				{
+					glm::vec3 away = glm::vec3(sphere) - light.position;
+					float limit = light.range + sphere.w;
+					if (glm::dot(away, away) <= limit * limit)
+					{
+						touched = true;
+						break;
+					}
+				}
+				if (!touched)
+					continue;
+			}
 			shadowPass(m_graphics->m_lightShadowFramebuffers[layer], m_graphics->m_lightShadowResolution, scene.lightShadowViewProj[layer],
-				&light.position, light.range + 3.f);
+				&light.position, light.range, 0.f, &m_lampShadowHashes[layer]);
 		}
 	}
 
@@ -171,15 +319,14 @@ vk::CommandBuffer Renderer::RecordCommandBuffer(const uint32_t& imageIndex)
 		commandBuffer.setScissor(0, 1, &sceneArea);
 		commandBuffer.bindVertexBuffers(0, 1, &m_modelManger->m_vertexBuffer, &vertexOffset);
 		commandBuffer.bindIndexBuffer(m_modelManger->m_indexBuffer, 0, vk::IndexType::eUint32);
-		DrawList(commandBuffer, opaque, m_graphics->m_upscalePipeline);
-		DrawList(commandBuffer, transparent, m_graphics->m_upscaleTransparentPipeline);
+		DrawList(commandBuffer, visibleOpaque, m_graphics->m_upscalePipeline);
+		DrawList(commandBuffer, visibleTransparent, m_graphics->m_upscaleTransparentPipeline);
 		commandBuffer.endRenderPass();
 
 		RecordUpscale(commandBuffer, jitter, resetHistory);
 	}
 	m_resetHistory = false;
 	m_graphics->m_upscaleHistoryLost = false;
-
 	std::vector<vk::ClearValue> clearValues = { clearColor, clearDepth };
 	vk::Rect2D renderArea = {
 		.offset = {0, 0},
@@ -227,52 +374,53 @@ vk::CommandBuffer Renderer::RecordCommandBuffer(const uint32_t& imageIndex)
 	commandBuffer.bindIndexBuffer(m_modelManger->m_indexBuffer, 0, vk::IndexType::eUint32);
 
 	// Solid things first; glass blends over them, furthest first.
-	DrawList(commandBuffer, opaque, m_graphics->m_pipelineGraphics);
-	DrawList(commandBuffer, transparent, m_graphics->m_pipelineTransparent);
+	DrawList(commandBuffer, visibleOpaque, m_graphics->m_pipelineGraphics);
+	DrawList(commandBuffer, visibleTransparent, m_graphics->m_pipelineTransparent);
 
 	return commandBuffer;
 }
 
-void Renderer::DrawList(vk::CommandBuffer& commandBuffer, const std::vector<DrawItem>& items, const vk::Pipeline& pipeline) const
+void Renderer::DrawList(vk::CommandBuffer& commandBuffer, const std::vector<const DrawItem*>& items, const vk::Pipeline& pipeline)
 {
 	if (items.empty())
 		return;
 
 	auto frame = m_graphics->m_frameInFlightIndex;
 	std::array<vk::DescriptorSet, 3> descriptorSets = {
-		m_graphics->m_dynamicUBODescriptorSets[frame],
+		m_graphics->m_instanceDescriptorSets[frame],
 		m_graphics->m_samplerDescriptorSet,
 		m_graphics->m_sceneDescriptorSets[frame]
 	};
 
 	commandBuffer.bindPipeline(vk::PipelineBindPoint::eGraphics, pipeline);
-	for (const auto& item : items)
+	// Bound once for the whole list: each object's data is found through its slot in the draw list.
+	commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, m_graphics->m_pipelineLayout, 0,
+		static_cast<uint32_t>(descriptorSets.size()), descriptorSets.data(), 0, nullptr);
+	DrawInstanced(commandBuffer, items);
+}
+
+void Renderer::DrawInstanced(vk::CommandBuffer& commandBuffer, const std::vector<const DrawItem*>& items)
+{
+	// Each run of the same model is one draw, an instance per object: its slots go in the draw list,
+	// and the draw's first instance says where they start.
+	auto list = static_cast<uint32_t*>(m_graphics->m_drawListBuffersMapped[m_graphics->m_frameInFlightIndex]);
+	for (size_t first = 0; first < items.size();)
 	{
-		commandBuffer.bindDescriptorSets(vk::PipelineBindPoint::eGraphics, // pipelineBindPoint
-			m_graphics->m_pipelineLayout, 								   // layout
-			0,															   // firstSet
-			static_cast<uint32_t>(descriptorSets.size()),				   // descriptorSetCount
-			descriptorSets.data(),										   // pDescriptorSets
-			1,															   // dynamicOffsetCount
-			&item.dynamicOffset);										   // pDynamicOffsets
+		uint32_t modelIndex = items[first]->modelIndex;
+		size_t end = first + 1;
+		while (end < items.size() && items[end]->modelIndex == modelIndex)
+			end++;
+		auto count = static_cast<uint32_t>(end - first);
+		// A full list leaves the rest undrawn this frame rather than overrunning the buffer.
+		if (m_drawCursor + count > MAX_DRAW_ENTRIES)
+			return;
 
-		ObjectPushConstants pushConstants = {
-			.tint = item.object->GetTint(),
-			.emissive = item.object->GetEmissive(),
-			.textureIndex = item.object->GetTextureIndex(),
-			.shading = static_cast<uint32_t>(item.object->GetShading())
-		};
-		commandBuffer.pushConstants(m_graphics->m_pipelineLayout, // layout
-			vk::ShaderStageFlagBits::eFragment,					  // stageFlags
-			0,													  // offset
-			sizeof(ObjectPushConstants),						  // size
-			&pushConstants);									  // pValues
-
-		commandBuffer.drawIndexed(m_modelManger->m_indicesCounts[item.modelIndex - 1],    //indexCount
-			1,																			  //instanceCount
-			m_modelManger->m_indicesOffsets[item.modelIndex - 1],						  //firstIndex
-			static_cast<uint32_t>(m_modelManger->m_verticesOffsets[item.modelIndex - 1]), //vertexOffset
-			0);																			  //firstInstance
+		uint32_t firstInstance = m_drawCursor;
+		for (size_t i = first; i < end; i++)
+			list[m_drawCursor++] = items[i]->slot;
+		commandBuffer.drawIndexed(m_modelManger->m_indicesCounts[modelIndex - 1], count, m_modelManger->m_indicesOffsets[modelIndex - 1],
+			static_cast<uint32_t>(m_modelManger->m_verticesOffsets[modelIndex - 1]), firstInstance);
+		first = end;
 	}
 }
 
@@ -417,9 +565,13 @@ void Renderer::WriteSceneUniforms(const Camera& camera, float aspect, SceneUnifo
 	scene.skyZenith = glm::vec4(m_lighting.skyZenith, 0.f);
 	scene.skyHorizon = glm::vec4(m_lighting.skyHorizon, 0.f);
 	scene.groundColor = glm::vec4(m_lighting.groundColor, 0.f);
-	scene.interiorAmbient = glm::vec4(m_lighting.interiorAmbient, m_lighting.hasInterior ? 1.f : 0.f);
-	scene.interiorMin = glm::vec4(m_lighting.interiorMin, 0.f);
-	scene.interiorMax = glm::vec4(m_lighting.interiorMax, 0.f);
+	int interiors = (std::min)(static_cast<int>(m_lighting.interiors.size()), MAX_INTERIORS);
+	scene.interiorAmbient = glm::vec4(m_lighting.interiorAmbient, static_cast<float>(interiors));
+	for (int i = 0; i < interiors; i++)
+	{
+		scene.interiorMin[i] = glm::vec4(m_lighting.interiors[i].min, 0.f);
+		scene.interiorMax[i] = glm::vec4(m_lighting.interiors[i].max, 0.f);
+	}
 	scene.fogColor = glm::vec4(m_lighting.fogColor, m_lighting.fogDensity);
 
 	int count = (std::min)(static_cast<int>(m_lighting.pointLights.size()), MAX_POINT_LIGHTS);
@@ -567,7 +719,7 @@ Renderer::Renderer()
 	auto textureDescriptors = m_textureManager->CreateTextures();
 	m_modelManger->CreateModels();
 
-	m_graphics->CreateDynamicUniformBuffers();
+	m_graphics->CreateInstanceBuffers();
 
 	m_graphics->CreateDescriptorPool(m_textureManager->GetNumberOfTextures());
 	m_graphics->CreateDescriptorSetLayout(m_textureManager->GetNumberOfTextures());
