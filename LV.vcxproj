@@ -191,6 +191,8 @@
     <ClCompile Include="Engine\Objects\ObjectManager.cpp" />
     <ClCompile Include="Engine\Graphics\Renderer.cpp" />
     <ClCompile Include="Engine\Utility\InputManager.cpp" />
+    <ClCompile Include="Engine\Networking\Socket.cpp" />
+    <ClCompile Include="Engine\Networking\Crypto.cpp" />
     <ClCompile Include="Libraries\imgui\backends\imgui_impl_glfw.cpp" />
     <ClCompile Include="Libraries\imgui\backends\imgui_impl_vulkan.cpp" />
     <ClCompile Include="Libraries\imgui\imgui.cpp" />
@@ -224,6 +226,8 @@
     <ClInclude Include="Engine\Graphics\Renderer.h" />
     <ClInclude Include="Engine\Objects\ObjectManager.h" />
     <ClInclude Include="Engine\Utility\InputManager.h" />
+    <ClInclude Include="Engine\Networking\Socket.h" />
+    <ClInclude Include="Engine\Networking\Crypto.h" />
     <ClInclude Include="Libraries\imgui\backends\imgui_impl_glfw.h" />
     <ClInclude Include="Libraries\imgui\backends\imgui_impl_vulkan.h" />
     <ClInclude Include="Libraries\imgui\imconfig.h" />
