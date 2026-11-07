@@ -35,8 +35,10 @@ struct InstanceData
 	float emissive;
 	uint32_t textureIndex;
 	uint32_t shading;			// ObjectShading
-	uint32_t padding;
+	uint32_t flags;				// INSTANCE_IN_FRONT
 };
+// InstanceData::flags: drawn in front of everything else (Object::SetInFront).
+constexpr uint32_t INSTANCE_IN_FRONT = 1u;
 static_assert(sizeof(InstanceData) == 160, "InstanceData must match the shaders' std430 layout.");
 
 // Objects beyond this many have no instance slot and are not drawn.

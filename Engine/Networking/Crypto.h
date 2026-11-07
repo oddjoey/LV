@@ -12,11 +12,13 @@
 //   client -> server   its KeyExchange's public key
 //   server -> client   its KeyExchange's public key, its Identity, and the Identity's signature of
 //                      HandshakeTranscript(both keys)
+// 
 // Each side makes a new P-256 key pair for the connection, and from its own private key and the
 // other's public key both work out the same secret, which nobody watching can. Two AES-256-GCM keys
 // come from it, one each way (Connection::Encrypt). The server's signature proves the exchange is
 // with the holder of its identity key, which it keeps for good: the client remembers each server's
 // identity the first time (KnownHosts), and won't talk to a server at that address with another.
+
 namespace Net
 {
 	// One direction of an encrypted connection: AES-256-GCM. Messages are numbered, so one that's
@@ -49,8 +51,10 @@ namespace Net
 		KeyExchange& operator=(const KeyExchange&) = delete;
 
 		static std::unique_ptr<KeyExchange> Create();
+
 		// To send to the other side, as hex.
 		const std::string& PublicKey() const { return m_public; }
+
 		// The keys each way, from the other side's public key. False if it isn't a proper key.
 		bool Derive(const std::string& peerPublic, bool server, const std::string& clientPublic, const std::string& serverPublic,
 			std::unique_ptr<Cipher>& sending, std::unique_ptr<Cipher>& receiving) const;

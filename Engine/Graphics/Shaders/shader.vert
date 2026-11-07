@@ -27,6 +27,10 @@ void main() {
     InstanceData object = instances[slots[gl_InstanceIndex]];
     vec4 worldPosition = object.model * vec4(inPosition, 1.0);
     gl_Position = scene.proj * scene.view * worldPosition;
+    // In front of everything: its depth squeezed up against the near plane, so it passes the depth
+    // test against the world but still sorts against itself.
+    if ((object.flags & INSTANCE_IN_FRONT) != 0u)
+        gl_Position.z *= 0.01;
     fragColor = inColor;
     fragTexCoord = inTexCoord;
     // Good enough for the uniform and near-uniform scales the engine uses.

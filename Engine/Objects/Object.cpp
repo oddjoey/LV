@@ -112,6 +112,17 @@ ObjectShading Object::GetShading() const
 	return m_shading;
 }
 
+Object* Object::SetInFront(const bool& inFront)
+{
+	m_inFront = inFront;
+	return this;
+}
+
+bool Object::IsInFront() const
+{
+	return m_inFront;
+}
+
 bool Object::IsTransparent() const
 {
 	return m_tint.a < 0.999f;

@@ -108,7 +108,7 @@ vk::CommandBuffer Renderer::RecordCommandBuffer(const uint32_t& imageIndex)
 				instance.emissive = object->GetEmissive();
 				instance.textureIndex = object->GetTextureIndex();
 				instance.shading = static_cast<uint32_t>(object->GetShading());
-				instance.padding = 0;
+				instance.flags = object->IsInFront() ? INSTANCE_IN_FRONT : 0u;
 				uint32_t slot = objectIndex - 1;
 				memcpy(instances + slot, &instance, sizeof(instance));
 

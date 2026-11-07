@@ -34,16 +34,12 @@ namespace Net
 
 		const Providers& Algorithms()
 		{
-			static Providers providers = [] {
-				Providers p;
-				p.ready = BCryptOpenAlgorithmProvider(&p.aes, BCRYPT_AES_ALGORITHM, nullptr, 0) == 0
-					&& BCryptSetProperty(p.aes, BCRYPT_CHAINING_MODE, reinterpret_cast<PUCHAR>(const_cast<wchar_t*>(BCRYPT_CHAIN_MODE_GCM)),
-						sizeof(BCRYPT_CHAIN_MODE_GCM), 0) == 0
-					&& BCryptOpenAlgorithmProvider(&p.ecdh, BCRYPT_ECDH_P256_ALGORITHM, nullptr, 0) == 0
-					&& BCryptOpenAlgorithmProvider(&p.ecdsa, BCRYPT_ECDSA_P256_ALGORITHM, nullptr, 0) == 0
-					&& BCryptOpenAlgorithmProvider(&p.sha256, BCRYPT_SHA256_ALGORITHM, nullptr, 0) == 0;
-				return p;
-			}();
+			static Providers providers;
+			providers.ready = BCryptOpenAlgorithmProvider(&providers.aes, BCRYPT_AES_ALGORITHM, nullptr, 0) == 0
+				&& BCryptSetProperty(providers.aes, BCRYPT_CHAINING_MODE, reinterpret_cast<PUCHAR>(const_cast<wchar_t*>(BCRYPT_CHAIN_MODE_GCM)), sizeof(BCRYPT_CHAIN_MODE_GCM), 0) == 0
+				&& BCryptOpenAlgorithmProvider(&providers.ecdh, BCRYPT_ECDH_P256_ALGORITHM, nullptr, 0) == 0
+				&& BCryptOpenAlgorithmProvider(&providers.ecdsa, BCRYPT_ECDSA_P256_ALGORITHM, nullptr, 0) == 0
+				&& BCryptOpenAlgorithmProvider(&providers.sha256, BCRYPT_SHA256_ALGORITHM, nullptr, 0) == 0;
 			return providers;
 		}
 

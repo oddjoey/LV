@@ -7,8 +7,9 @@ struct InstanceData {
     float emissive;
     uint textureIndex;
     uint shading;           // 0 lit, 1 unlit, 2 sky
-    uint padding;
+    uint flags;             // INSTANCE_IN_FRONT
 };
+const uint INSTANCE_IN_FRONT = 1u;
 
 layout(std430, set = 0, binding = 0) readonly buffer Instances {
     InstanceData instances[];

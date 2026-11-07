@@ -48,6 +48,11 @@ public:
 	Object* SetShading(const ObjectShading& shading);
 	ObjectShading GetShading() const;
 
+	// Drawn over the rest of the world, as if right in front of the camera, but still lit where it
+	// really is: for a first person view model, so the arm and what it holds never go into a wall.
+	Object* SetInFront(const bool& inFront);
+	bool IsInFront() const;
+
 	// A tint alpha below 1 draws the object blended, after everything solid.
 	bool IsTransparent() const;
 private:
@@ -61,6 +66,7 @@ private:
 	bool m_castsShadows = true;
 	bool m_castsLampShadows = true;
 	ObjectShading m_shading = ObjectShading::LIT;
+	bool m_inFront = false;
 };
 
 typedef std::shared_ptr<Object> pObject;
