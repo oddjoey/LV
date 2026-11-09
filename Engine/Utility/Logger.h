@@ -20,12 +20,10 @@ public:
 	{
 		PrintSuffex(level);
 
-		const auto& type = typeid(value);
-		
-		auto pCharConstCheck = std::make_unique<char[]>(11);
-		strncpy_s(pCharConstCheck.get(), 11, type.name(), 10);
+		// Text (a string, or a char array or pointer) is printed as it is.
+		constexpr bool text = std::is_same_v<T, std::string> || std::is_same_v<std::decay_t<T>, const char*> || std::is_same_v<std::decay_t<T>, char*>;
 
-		if (type == typeid(std::string) || !strcmp(pCharConstCheck.get(), "char const"))
+		if (text)
 			std::cout << termcolor::bright_grey << value << termcolor::reset << '\n';
 		else
 		{
@@ -105,6 +103,14 @@ private:
 #else
 	#define LOG_DEBUG(value)	((void)0) // Do nothing in release mode
 #endif // _DEBUG
+
+// Every buffer, image and one-off command buffer the graphics makes: hundreds at start up, and the console
+// printing them was a good part of its time. Off unless LV_VERBOSE_LOGGING is defined.
+#ifdef LV_VERBOSE_LOGGING
+	#define LOG_VERBOSE(value)	Logger::Print(value, #value, Logger::LogLevel::DEBUG)
+#else
+	#define LOG_VERBOSE(value)	((void)0)
+#endif // LV_VERBOSE_LOGGING
 
 #define LOG_INFO(value)		Logger::Print(value, #value, Logger::LogLevel::INFO)
 #define LOG_SUCCESS(value)	Logger::Print(value, #value, Logger::LogLevel::SUCCESS)

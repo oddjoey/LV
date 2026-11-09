@@ -1,5 +1,9 @@
 #include "DLSS.h"
 
+// NVIDIA's NGX is Windows (and Linux) only: elsewhere (macOS) DLSS is never available, and the
+// renderer draws at full resolution.
+#ifdef _WIN32
+
 #include <filesystem>
 #include <format>
 
@@ -286,3 +290,28 @@ bool DLSS::Evaluate(VkCommandBuffer commandBuffer, const Inputs& inputs)
 	}
 	return true;
 }
+
+#else
+
+std::vector<std::string> DLSS::InstanceExtensions() { return {}; }
+std::vector<std::string> DLSS::DeviceExtensions(VkInstance, VkPhysicalDevice) { return {}; }
+
+bool DLSS::Initialize(VkInstance, VkPhysicalDevice, VkDevice device)
+{
+	m_initialized = true;
+	m_available = false;
+	m_device = device;
+	m_status = "DLSS needs an NVIDIA GPU on Windows.";
+	return false;
+}
+
+void DLSS::Shutdown() {}
+bool DLSS::IsAvailable() const { return false; }
+const std::string& DLSS::GetStatus() const { return m_status; }
+bool DLSS::GetRenderSize(DLSSMode, uint32_t, uint32_t, uint32_t&, uint32_t&) { return false; }
+bool DLSS::CreateFeature(VkCommandBuffer, DLSSMode, uint32_t, uint32_t, uint32_t, uint32_t) { return false; }
+void DLSS::ReleaseFeature() {}
+bool DLSS::HasFeature() const { return false; }
+bool DLSS::Evaluate(VkCommandBuffer, const Inputs&) { return false; }
+
+#endif

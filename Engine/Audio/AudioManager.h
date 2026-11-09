@@ -2,6 +2,7 @@
 
 #include <array>
 #include <cstdint>
+#include <deque>
 #include <vector>
 
 #include "../Utility/Utility.h"
@@ -11,7 +12,7 @@ struct IXAudio2MasteringVoice;
 struct IXAudio2SubmixVoice;
 struct IXAudio2SourceVoice;
 
-// Sound through XAudio2, which every Windows 10 and 11 machine has. Sounds are mono clips of 16-bit
+// Sound through XAudio2, which every Windows 10 and 11 machine has (Core Audio on macOS). Sounds are mono clips of 16-bit
 // samples at SAMPLE_RATE, made however the game likes (loaded, or synthesised). Each plays on a bus,
 // so effects, ambience and the interface can each have their own volume under the master one.
 // Without a working audio device every call quietly does nothing.
@@ -42,6 +43,15 @@ public:
 	// Once a frame: lets go of the voices that have finished.
 	void Update();
 private:
+#ifndef _WIN32
+	// macOS: its own mixer, played through Core Audio (AudioManagerMac.cpp).
+	struct Mixer;
+	Mixer*											m_mixer = nullptr;
+	std::deque<std::vector<int16_t>>				m_clips = {};	// a deque: adding one never moves the others
+	Loop											m_nextLoop = 1;
+	static constexpr size_t MAX_VOICES = 48;
+	static constexpr float MAX_PITCH = 4.f;
+#else
 	struct Voice
 	{
 		IXAudio2SourceVoice* voice = nullptr;
@@ -60,4 +70,5 @@ private:
 
 	static constexpr size_t MAX_VOICES = 48;
 	static constexpr float MAX_PITCH = 4.f;
+#endif
 };

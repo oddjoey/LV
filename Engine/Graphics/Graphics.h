@@ -2,11 +2,15 @@
 
 #include <stb_image.h>
 
+#ifdef _WIN32
 #define VK_USE_PLATFORM_WIN32_KHR
+#endif
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
+#ifdef _WIN32
 #define GLFW_EXPOSE_NATIVE_WIN32
 #include <GLFW/glfw3native.h>
+#endif
 
 #define VULKAN_HPP_NO_CONSTRUCTORS
 #define VULKAN_HPP_DISPATCH_LOADER_DYNAMIC 1
@@ -161,8 +165,27 @@ public:
 	void TransitionImageLayout(vk::Image image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout,
 		uint32_t mipLevels, const vk::CommandBuffer* inCommandBuffer = nullptr);
 	void CopyDataToImage(void* data, vk::DeviceSize size, vk::Image& image, uint32_t imageWidth, uint32_t imageHeight);
+	// Waits for the GPU to finish everything it was given, e.g. before changing a texture it may be reading.
+	void WaitIdle() { m_logicalDevice.waitIdle(); }
+	// New pixels (RGBA8, the image's size) for images already in use, mips and all: recorded together and sent
+	// to the GPU without waiting for it. Ordered on the graphics queue, so frames after see the new pixels.
+	struct ImageUpload
+	{
+		vk::Image image = {};
+		uint32_t width = 0;
+		uint32_t height = 0;
+		uint32_t mipLevels = 1;
+		const uint8_t* pixels = nullptr;
+		// What it holds now: Undefined for a new image, which has nothing worth keeping.
+		vk::ImageLayout from = vk::ImageLayout::eShaderReadOnlyOptimal;
+	};
+	void UploadImages(const std::vector<ImageUpload>& uploads);
+	// Points texture slots (by texture index, from 1) at new images once the renderer is running. Slots a frame
+	// still on the GPU may be drawing with have to wait for it, unless the GPU can take updates while they draw.
+	void WriteTextureDescriptors(const std::vector<std::pair<uint32_t, vk::DescriptorImageInfo>>& writes);
 	void CopyBufferToImage(vk::Buffer buffer, vk::Image image, uint32_t imageWidth, uint32_t imageHeight);
-	vk::Sampler CreateSampler(bool cleanup = false);
+	// clampToEdge: the texture's edge texels go on past its edges, instead of it repeating.
+	vk::Sampler CreateSampler(bool cleanup = false, bool clampToEdge = false);
 	void GenerateMipmaps(const vk::Image& image, const int32_t& width, const int32_t& height, const uint32_t& mipLevels);
 	std::vector<vk::CommandBuffer> CreateCommandBuffers(const uint32_t& count);
 	void BeginCommandBuffer(vk::CommandBuffer& commandBuffer, vk::CommandBufferUsageFlags usageFlags);
@@ -372,6 +395,15 @@ private:
 
 	// Command pools
 	vk::CommandPool m_commandPoolDraw = {};
+	// UploadImages' work still on the GPU: what to free once its fence is signalled.
+	struct PendingUpload
+	{
+		vk::Fence fence = {};
+		vk::CommandBuffer commandBuffer = {};
+		vk::Buffer buffer = {};
+		vk::DeviceMemory memory = {};
+	};
+	std::vector<PendingUpload> m_pendingUploads = {};
 	vk::CommandPool m_commandPoolTransfer = {};
 
 	// Sync objects
@@ -447,6 +479,8 @@ private:
 	std::vector<vk::ImageView> m_lightShadowLayerViews = {};
 	std::vector<vk::Framebuffer> m_lightShadowFramebuffers = {};
 	bool m_depthClampSupported = false;
+	// Texture slots not drawn with can be rewritten while frames using the set are still on the GPU.
+	bool m_textureUpdateAfterBind = false;
 
 	// DLSS: the scene renders into the colour, motion and depth targets at the render size, DLSS
 	// upscales into the output and a full-screen pass copies that to the swap chain under the UI.

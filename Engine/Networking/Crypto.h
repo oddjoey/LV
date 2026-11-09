@@ -5,7 +5,7 @@
 #include <string>
 #include <vector>
 
-// Encryption between a game and its server, on Windows' own cryptography (CNG), so passwords and
+// Encryption between a game and its server (Windows' own cryptography, CNG, or OpenSSL on macOS), so passwords and
 // everything else sent can't be read or changed on the way.
 //
 // The handshake, before anything private is said:

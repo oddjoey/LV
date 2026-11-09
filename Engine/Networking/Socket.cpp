@@ -1,16 +1,44 @@
 // Built without the precompiled header: Winsock 2 has to come before windows.h, which that pulls in.
+// Elsewhere (macOS) it's the BSD sockets, under the same names as Winsock's below.
+#ifdef _WIN32
 #define NOMINMAX
 #define WIN32_LEAN_AND_MEAN
 #include <winsock2.h>
 #include <ws2tcpip.h>
+#pragma comment(lib, "ws2_32.lib")
+using SocketLength = int;
+#else
+#include <arpa/inet.h>
+#include <cerrno>
+#include <fcntl.h>
+#include <netdb.h>
+#include <netinet/in.h>
+#include <netinet/tcp.h>
+#include <sys/select.h>
+#include <sys/socket.h>
+#include <unistd.h>
+using SOCKET = int;
+using SocketLength = socklen_t;
+constexpr SOCKET INVALID_SOCKET = -1;
+constexpr int SOCKET_ERROR = -1;
+inline int closesocket(SOCKET socket) { return ::close(socket); }
+inline int WSAGetLastError() { return errno; }
+// A connect that's under way says EINPROGRESS here, where Winsock says it would block.
+constexpr int WSAEWOULDBLOCK = EWOULDBLOCK;
+constexpr int WSAECONNREFUSED = ECONNREFUSED;
+constexpr int WSAETIMEDOUT = ETIMEDOUT;
+constexpr int WSAEHOSTUNREACH = EHOSTUNREACH;
+constexpr int WSAENETUNREACH = ENETUNREACH;
+constexpr int WSAEADDRINUSE = EADDRINUSE;
+constexpr int WSAEACCES = EACCES;
+#endif
 
 #include "Socket.h"
 #include "Crypto.h"
 
+#include <algorithm>
 #include <cstring>
 #include <format>
-
-#pragma comment(lib, "ws2_32.lib")
 
 namespace Net
 {
@@ -21,19 +49,48 @@ namespace Net
 
 		bool Startup()
 		{
+#ifdef _WIN32
 			static bool started = [] {
 				WSADATA data = {};
 				return WSAStartup(MAKEWORD(2, 2), &data) == 0;
 			}();
 			return started;
+#else
+			return true;
+#endif
+		}
+
+		// Whether the last call only didn't finish because the socket doesn't wait.
+		bool WouldBlock()
+		{
+			int code = WSAGetLastError();
+#ifdef _WIN32
+			return code == WSAEWOULDBLOCK;
+#else
+			return code == EWOULDBLOCK || code == EAGAIN || code == EINPROGRESS;
+#endif
+		}
+
+		void SetNonBlocking(SOCKET socket)
+		{
+#ifdef _WIN32
+			u_long on = 1;
+			ioctlsocket(socket, FIONBIO, &on);
+#else
+			fcntl(socket, F_SETFL, fcntl(socket, F_GETFL, 0) | O_NONBLOCK);
+			// A send to a closed connection fails rather than killing the program.
+			int on = 1;
+#ifdef SO_NOSIGPIPE
+			setsockopt(socket, SOL_SOCKET, SO_NOSIGPIPE, &on, sizeof(on));
+#endif
+#endif
 		}
 
 		void MakeNonBlocking(SOCKET socket)
 		{
-			u_long on = 1;
-			ioctlsocket(socket, FIONBIO, &on);
+			SetNonBlocking(socket);
 			// Small messages (where everyone is) go at once, not batched up.
-			BOOL noDelay = TRUE;
+			int noDelay = 1;
 			setsockopt(socket, IPPROTO_TCP, TCP_NODELAY, reinterpret_cast<const char*>(&noDelay), sizeof(noDelay));
 		}
 
@@ -66,7 +123,7 @@ namespace Net
 	{
 		if (!Startup())
 		{
-			error = "Windows networking didn't start";
+			error = "networking didn't start";
 			return nullptr;
 		}
 		addrinfo hints = {};
@@ -93,7 +150,7 @@ namespace Net
 		inet_ntop(AF_INET, &reinterpret_cast<sockaddr_in*>(found->ai_addr)->sin_addr, address, sizeof(address));
 		freeaddrinfo(found);
 
-		bool connecting = result == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK;
+		bool connecting = result == SOCKET_ERROR && WouldBlock();
 		if (result == SOCKET_ERROR && !connecting)
 		{
 			error = ErrorText(WSAGetLastError());
@@ -122,13 +179,13 @@ namespace Net
 		FD_ZERO(&failed);
 		FD_SET(static_cast<SOCKET>(m_socket), &failed);
 		timeval now = { 0, 0 };
-		int ready = select(0, nullptr, &writable, &failed, &now);
+		int ready = select(static_cast<int>(m_socket) + 1, nullptr, &writable, &failed, &now);
 		if (ready == 0)
 			return Status::CONNECTING;
 		if (ready < 0 || FD_ISSET(static_cast<SOCKET>(m_socket), &failed))
 		{
 			int code = WSAECONNREFUSED;
-			int length = sizeof(code);
+			SocketLength length = sizeof(code);
 			if (ready > 0)
 				getsockopt(static_cast<SOCKET>(m_socket), SOL_SOCKET, SO_ERROR, reinterpret_cast<char*>(&code), &length);
 			error = ErrorText(code);
@@ -173,7 +230,7 @@ namespace Net
 			int sent = ::send(static_cast<SOCKET>(m_socket), m_outgoing.data(), chunk, 0);
 			if (sent == SOCKET_ERROR)
 			{
-				if (WSAGetLastError() != WSAEWOULDBLOCK)
+				if (!WouldBlock())
 					Close();
 				return;
 			}
@@ -197,7 +254,7 @@ namespace Net
 				m_incoming.append(buffer, static_cast<size_t>(received));
 				continue;
 			}
-			if (received == 0 || WSAGetLastError() != WSAEWOULDBLOCK)
+			if (received == 0 || !WouldBlock())
 				Close();
 			break;
 		}
@@ -247,7 +304,7 @@ namespace Net
 	{
 		if (!Startup())
 		{
-			error = "Windows networking didn't start";
+			error = "networking didn't start";
 			return nullptr;
 		}
 		SOCKET socket = ::socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
@@ -256,6 +313,11 @@ namespace Net
 			error = ErrorText(WSAGetLastError());
 			return nullptr;
 		}
+#ifndef _WIN32
+		// A server restarted straight away can have its port back.
+		int reuse = 1;
+		setsockopt(socket, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof(reuse));
+#endif
 		sockaddr_in address = {};
 		address.sin_family = AF_INET;
 		address.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -267,15 +329,14 @@ namespace Net
 			closesocket(socket);
 			return nullptr;
 		}
-		u_long on = 1;
-		ioctlsocket(socket, FIONBIO, &on);
+		SetNonBlocking(socket);
 		return std::unique_ptr<Listener>(new Listener(socket));
 	}
 
 	std::unique_ptr<Connection> Listener::Accept()
 	{
 		sockaddr_in from = {};
-		int length = sizeof(from);
+		SocketLength length = sizeof(from);
 		SOCKET socket = accept(static_cast<SOCKET>(m_socket), reinterpret_cast<sockaddr*>(&from), &length);
 		if (socket == INVALID_SOCKET)
 			return nullptr;

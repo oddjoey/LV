@@ -1,3 +1,6 @@
+// Windows: XAudio2. macOS has its own, in AudioManagerMac.cpp.
+#ifdef _WIN32
+
 #include "AudioManager.h"
 
 #include <algorithm>
@@ -183,3 +186,5 @@ void AudioManager::Update()
 			++it;
 	}
 }
+
+#endif

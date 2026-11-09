@@ -45,6 +45,8 @@ private:
 	vk::DescriptorImageInfo		m_descriptor = {};
 
 	uint32_t					m_mipLevels = 0;
+	bool						m_clampToEdge = false;	// sampled clamped at its edges rather than repeating
+	bool						m_reserved = false;		// no image until its first pixels arrive (TextureManager::ReserveTexture)
 };
 
 typedef std::shared_ptr<Texture> pTexture;

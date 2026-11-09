@@ -98,6 +98,13 @@ void Graphics::CreateVulkanInstance()
 	createInfo.pNext = &m_debugCreateInfo;
 #endif // _DEBUG
 
+#ifdef __APPLE__
+	// macOS runs Vulkan on Metal (MoltenVK), a "portability" implementation the loader only lists
+	// when asked for it.
+	requiredExtensionNames.push_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
+	createInfo.flags |= vk::InstanceCreateFlagBits::eEnumeratePortabilityKHR;
+#endif
+
 	createInfo.enabledExtensionCount = static_cast<uint32_t>(requiredExtensionNames.size());
 	createInfo.ppEnabledExtensionNames = requiredExtensionNames.data();
 
@@ -177,7 +184,8 @@ void Graphics::CreateLogicalDevice()
 	}
 
 	vk::PhysicalDeviceFeatures deviceFeatures {};
-	deviceFeatures.depthBounds = vk::True;
+	// Never used by a pipeline, and Metal hasn't got it: on only where the GPU has it.
+	deviceFeatures.depthBounds = m_physicalDeviceFeatures.depthBounds;
 	deviceFeatures.samplerAnisotropy = vk::True;
 	deviceFeatures.sampleRateShading = vk::True;
 	// DLSS's scene pass blends glass into the colour target but leaves its motion vectors alone.
@@ -190,10 +198,24 @@ void Graphics::CreateLogicalDevice()
 		.descriptorBindingVariableDescriptorCount = vk::True,
 		.runtimeDescriptorArray = vk::True
 	};
+	// Textures made after start up (a wall's paint) go into their slots without waiting on the GPU, where it can.
+	{
+		vk::PhysicalDeviceDescriptorIndexingFeatures supported{};
+		vk::PhysicalDeviceFeatures2 features2{ .pNext = &supported };
+		m_physicalDevice.getFeatures2(&features2);
+		m_textureUpdateAfterBind = supported.descriptorBindingSampledImageUpdateAfterBind && supported.descriptorBindingUpdateUnusedWhilePending;
+		descriptorIndexFeatures.descriptorBindingSampledImageUpdateAfterBind = m_textureUpdateAfterBind ? vk::True : vk::False;
+		descriptorIndexFeatures.descriptorBindingUpdateUnusedWhilePending = m_textureUpdateAfterBind ? vk::True : vk::False;
+	}
 
 	// DLSS (NGX) device extensions, where the GPU has them. Without them DLSS just reports itself
 	// unavailable.
 	std::vector<const char*> deviceExtensionNames = m_requiredDeviceExtensionNames;
+	// A portability implementation (MoltenVK) has to be told the program knows it's one.
+	constexpr const char* PORTABILITY_SUBSET = "VK_KHR_portability_subset";
+	if (std::any_of(m_physicalDeviceExtensions.begin(), m_physicalDeviceExtensions.end(),
+		[&](const vk::ExtensionProperties& extension) { return std::string(PORTABILITY_SUBSET) == extension.extensionName.data(); }))
+		deviceExtensionNames.push_back(PORTABILITY_SUBSET);
 	std::vector<std::string> dlssExtensions = DLSS::DeviceExtensions(m_vulkanInstance, m_physicalDevice);
 	bool bufferDeviceAddress = false;
 	for (const auto& name : dlssExtensions)
@@ -890,13 +912,13 @@ void Graphics::CleanupSwapChain()
 
 uint32_t Graphics::FindMemoryTypeIndex(uint32_t memoryTypeBitMask, vk::MemoryPropertyFlags memoryProperties)
 {
-	LOG_INFO("Finding memory type...");
+	LOG_VERBOSE("Finding memory type...");
 
 	for (uint32_t i = 0; i < m_physicalDeviceMemoryProps.memoryTypeCount; i++)
 	{
 		if (((1 << i) & memoryTypeBitMask) && (m_physicalDeviceMemoryProps.memoryTypes[i].propertyFlags & memoryProperties) == memoryProperties)
 		{
-			LOG_SUCCESS("Memory type found!");
+			LOG_VERBOSE("Memory type found!");
 			return i;
 		}
 	}
@@ -924,7 +946,7 @@ void Graphics::CopyDataToBuffer(void* data, vk::DeviceSize size, vk::Buffer& buf
 
 vk::Buffer Graphics::CreateBuffer(vk::DeviceSize bufferSize, vk::BufferUsageFlags bufferUsageFlags, vk::MemoryPropertyFlags memoryPropertyFlags, vk::DeviceMemory& deviceMemory, bool cleanup)
 {
-	LOG_INFO("Creating buffer...");
+	LOG_VERBOSE("Creating buffer...");
 
 	vk::BufferCreateInfo bufferInfo {
 		.size = bufferSize,
@@ -949,7 +971,7 @@ vk::Buffer Graphics::CreateBuffer(vk::DeviceSize bufferSize, vk::BufferUsageFlag
 
 	m_logicalDevice.bindBufferMemory(buffer, deviceMemory, 0);
 
-	LOG_SUCCESS("Buffer created successfully!");
+	LOG_VERBOSE("Buffer created successfully!");
 	if (cleanup)
 	{
 		m_manageMemories.push_back(deviceMemory);
@@ -996,6 +1018,8 @@ void Graphics::CreateDescriptorSetLayout(const uint32_t& numOfTextures)
 
 	std::vector<vk::DescriptorBindingFlags> bindingFlags(1);
 	bindingFlags[bindingFlags.size() - 1] = vk::DescriptorBindingFlagBits::eVariableDescriptorCount;
+	if (m_textureUpdateAfterBind)
+		bindingFlags[bindingFlags.size() - 1] |= vk::DescriptorBindingFlagBits::eUpdateAfterBind | vk::DescriptorBindingFlagBits::eUpdateUnusedWhilePending;
 
 	vk::DescriptorSetLayoutBindingFlagsCreateInfo flagsCreateInfo {
 		.bindingCount = static_cast<uint32_t>(bindingFlags.size()),
@@ -1009,6 +1033,7 @@ void Graphics::CreateDescriptorSetLayout(const uint32_t& numOfTextures)
 
 	vk::DescriptorSetLayoutCreateInfo samplerLayoutCreateInfo {
 		.pNext = &flagsCreateInfo,
+		.flags = m_textureUpdateAfterBind ? vk::DescriptorSetLayoutCreateFlagBits::eUpdateAfterBindPool : vk::DescriptorSetLayoutCreateFlags{},
 		.bindingCount = 1,
 		.pBindings = &combinedSampler
 	};
@@ -1132,11 +1157,26 @@ void Graphics::CreateDescriptorSets(const std::vector<vk::DescriptorImageInfo>& 
 	m_logicalDevice.updateDescriptorSets(1, &imageDescWrite, 0, nullptr);
 }
 
+void Graphics::WriteTextureDescriptors(const std::vector<std::pair<uint32_t, vk::DescriptorImageInfo>>& writes)
+{
+	if (writes.empty())
+		return;
+	// Without update after bind, the set mustn't change under a frame the GPU hasn't finished.
+	if (!m_textureUpdateAfterBind)
+		WaitIdle();
+	std::vector<vk::WriteDescriptorSet> descriptorWrites;
+	descriptorWrites.reserve(writes.size());
+	for (const auto& [index, info] : writes)
+		descriptorWrites.push_back({ .dstSet = m_samplerDescriptorSet, .dstBinding = 0, .dstArrayElement = index - 1, .descriptorCount = 1,
+			.descriptorType = vk::DescriptorType::eCombinedImageSampler, .pImageInfo = &info });
+	m_logicalDevice.updateDescriptorSets(static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
+}
+
 vk::Image Graphics::CreateImage(uint32_t imageWidth, uint32_t imageHeight, uint32_t mipLevels, vk::SampleCountFlagBits sampleCount,
 	vk::Format imageFormat, vk::ImageTiling imageTiling, vk::ImageUsageFlags imageUsage, vk::MemoryPropertyFlags memoryProperties, 
 	vk::DeviceMemory& deviceMemory, bool cleanup)
 {
-	LOG_INFO("Creating image...");
+	LOG_VERBOSE("Creating image...");
 
 	vk::ImageCreateInfo imageInfo {
 		.flags = {},
@@ -1171,7 +1211,7 @@ vk::Image Graphics::CreateImage(uint32_t imageWidth, uint32_t imageHeight, uint3
 
 	m_logicalDevice.bindImageMemory(image, deviceMemory, 0);
 
-	LOG_SUCCESS("Successfully created image!");
+	LOG_VERBOSE("Successfully created image!");
 	if (cleanup)
 	{
 		m_manageMemories.push_back(deviceMemory);
@@ -1182,7 +1222,7 @@ vk::Image Graphics::CreateImage(uint32_t imageWidth, uint32_t imageHeight, uint3
 
 vk::CommandBuffer Graphics::BeginSingleTimeCommands()
 {
-	LOG_INFO("Creating and starting single time commands buffer!");
+	LOG_VERBOSE("Creating and starting single time commands buffer!");
 
 	vk::CommandBufferAllocateInfo bufferAllocInfo{
 		.commandPool = m_commandPoolDraw,
@@ -1201,13 +1241,13 @@ vk::CommandBuffer Graphics::BeginSingleTimeCommands()
 	if (commandBuffer.begin(&beginInfo) != vk::Result::eSuccess)
 		throw std::runtime_error("failed to begin recording into command buffer!");
 
-	LOG_SUCCESS("Successfully created and began recording command buffer!");
+	LOG_VERBOSE("Successfully created and began recording command buffer!");
 	return commandBuffer;
 }
 
 void Graphics::EndSingleTimeCommands(vk::CommandBuffer commandBuffer)
 {
-	LOG_INFO("Freeing and ending single time command buffer...");
+	LOG_VERBOSE("Freeing and ending single time command buffer...");
 
 	commandBuffer.end();
 
@@ -1223,7 +1263,116 @@ void Graphics::EndSingleTimeCommands(vk::CommandBuffer commandBuffer)
 
 	m_logicalDevice.freeCommandBuffers(m_commandPoolDraw, 1, &commandBuffer);
 
-	LOG_SUCCESS("Successfully freed and ended single time command buffer!");
+	LOG_VERBOSE("Successfully freed and ended single time command buffer!");
+}
+
+void Graphics::UploadImages(const std::vector<ImageUpload>& uploads)
+{
+	// What earlier uploads left behind, once the GPU's done with it.
+	std::erase_if(m_pendingUploads, [&](const PendingUpload& pending) {
+		if (m_logicalDevice.getFenceStatus(pending.fence) != vk::Result::eSuccess)
+			return false;
+		m_logicalDevice.destroyFence(pending.fence, nullptr);
+		m_logicalDevice.freeCommandBuffers(m_commandPoolDraw, 1, &pending.commandBuffer);
+		m_logicalDevice.destroyBuffer(pending.buffer, nullptr);
+		m_logicalDevice.freeMemory(pending.memory, nullptr);
+		return true;
+	});
+	if (uploads.empty())
+		return;
+
+	// Every image's pixels in one staging buffer.
+	vk::DeviceSize total = 0;
+	for (const auto& upload : uploads)
+		total += static_cast<vk::DeviceSize>(upload.width) * upload.height * 4;
+	PendingUpload pending;
+	pending.buffer = CreateBuffer(total, vk::BufferUsageFlagBits::eTransferSrc,
+		vk::MemoryPropertyFlagBits::eHostVisible | vk::MemoryPropertyFlagBits::eHostCoherent, pending.memory);
+	void* mapped = nullptr;
+	if (m_logicalDevice.mapMemory(pending.memory, 0, total, {}, &mapped) != vk::Result::eSuccess)
+		throw std::runtime_error("failed to map the staging memory for an image upload!");
+	vk::DeviceSize offset = 0;
+	for (const auto& upload : uploads)
+	{
+		size_t size = static_cast<size_t>(upload.width) * upload.height * 4;
+		memcpy(static_cast<uint8_t*>(mapped) + offset, upload.pixels, size);
+		offset += size;
+	}
+	m_logicalDevice.unmapMemory(pending.memory);
+
+	vk::CommandBufferAllocateInfo allocateInfo{ .commandPool = m_commandPoolDraw, .level = vk::CommandBufferLevel::ePrimary, .commandBufferCount = 1 };
+	if (m_logicalDevice.allocateCommandBuffers(&allocateInfo, &pending.commandBuffer) != vk::Result::eSuccess)
+		throw std::runtime_error("failed to allocate a command buffer for an image upload!");
+	vk::CommandBuffer commands = pending.commandBuffer;
+	vk::CommandBufferBeginInfo beginInfo{ .flags = vk::CommandBufferUsageFlagBits::eOneTimeSubmit };
+	if (commands.begin(&beginInfo) != vk::Result::eSuccess)
+		throw std::runtime_error("failed to begin an image upload!");
+
+	auto barrier = [&](vk::Image image, uint32_t baseMip, uint32_t mips, vk::ImageLayout from, vk::ImageLayout to,
+		vk::AccessFlags srcAccess, vk::AccessFlags dstAccess, vk::PipelineStageFlags srcStage, vk::PipelineStageFlags dstStage) {
+		vk::ImageMemoryBarrier imageBarrier{
+			.srcAccessMask = srcAccess,
+			.dstAccessMask = dstAccess,
+			.oldLayout = from,
+			.newLayout = to,
+			.srcQueueFamilyIndex = vk::QueueFamilyIgnored,
+			.dstQueueFamilyIndex = vk::QueueFamilyIgnored,
+			.image = image,
+			.subresourceRange = vk::ImageSubresourceRange{ vk::ImageAspectFlagBits::eColor, baseMip, mips, 0, 1 }
+		};
+		commands.pipelineBarrier(srcStage, dstStage, {}, 0, nullptr, 0, nullptr, 1, &imageBarrier);
+	};
+
+	offset = 0;
+	for (const auto& upload : uploads)
+	{
+		// Whatever was drawing with it finishes first (it's earlier on the same queue).
+		const bool fresh = upload.from == vk::ImageLayout::eUndefined;
+		barrier(upload.image, 0, upload.mipLevels, upload.from, vk::ImageLayout::eTransferDstOptimal,
+			fresh ? vk::AccessFlags{} : vk::AccessFlags{ vk::AccessFlagBits::eShaderRead }, vk::AccessFlagBits::eTransferWrite,
+			fresh ? vk::PipelineStageFlagBits::eTopOfPipe : vk::PipelineStageFlagBits::eFragmentShader, vk::PipelineStageFlagBits::eTransfer);
+		vk::BufferImageCopy region{
+			.bufferOffset = offset,
+			.bufferRowLength = 0,
+			.bufferImageHeight = 0,
+			.imageSubresource = vk::ImageSubresourceLayers{ vk::ImageAspectFlagBits::eColor, 0, 0, 1 },
+			.imageOffset = vk::Offset3D{ 0, 0, 0 },
+			.imageExtent = vk::Extent3D{ upload.width, upload.height, 1 }
+		};
+		commands.copyBufferToImage(pending.buffer, upload.image, vk::ImageLayout::eTransferDstOptimal, 1, &region);
+		offset += static_cast<vk::DeviceSize>(upload.width) * upload.height * 4;
+
+		// Each mip from the one above it, then back to being read by the shaders.
+		int32_t mipWidth = static_cast<int32_t>(upload.width), mipHeight = static_cast<int32_t>(upload.height);
+		for (uint32_t mip = 1; mip < upload.mipLevels; mip++)
+		{
+			barrier(upload.image, mip - 1, 1, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eTransferSrcOptimal,
+				vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eTransferRead, vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eTransfer);
+			int32_t nextWidth = mipWidth > 1 ? mipWidth / 2 : 1, nextHeight = mipHeight > 1 ? mipHeight / 2 : 1;
+			vk::ImageBlit blit{
+				.srcSubresource = vk::ImageSubresourceLayers{ vk::ImageAspectFlagBits::eColor, mip - 1, 0, 1 },
+				.srcOffsets = std::array<vk::Offset3D, 2>{ vk::Offset3D{ 0, 0, 0 }, vk::Offset3D{ mipWidth, mipHeight, 1 } },
+				.dstSubresource = vk::ImageSubresourceLayers{ vk::ImageAspectFlagBits::eColor, mip, 0, 1 },
+				.dstOffsets = std::array<vk::Offset3D, 2>{ vk::Offset3D{ 0, 0, 0 }, vk::Offset3D{ nextWidth, nextHeight, 1 } }
+			};
+			commands.blitImage(upload.image, vk::ImageLayout::eTransferSrcOptimal, upload.image, vk::ImageLayout::eTransferDstOptimal, 1, &blit, vk::Filter::eLinear);
+			barrier(upload.image, mip - 1, 1, vk::ImageLayout::eTransferSrcOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
+				vk::AccessFlagBits::eTransferRead, vk::AccessFlagBits::eShaderRead, vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eFragmentShader);
+			mipWidth = nextWidth;
+			mipHeight = nextHeight;
+		}
+		barrier(upload.image, upload.mipLevels - 1, 1, vk::ImageLayout::eTransferDstOptimal, vk::ImageLayout::eShaderReadOnlyOptimal,
+			vk::AccessFlagBits::eTransferWrite, vk::AccessFlagBits::eShaderRead, vk::PipelineStageFlagBits::eTransfer, vk::PipelineStageFlagBits::eFragmentShader);
+	}
+	commands.end();
+
+	vk::FenceCreateInfo fenceInfo{};
+	if (m_logicalDevice.createFence(&fenceInfo, nullptr, &pending.fence) != vk::Result::eSuccess)
+		throw std::runtime_error("failed to create a fence for an image upload!");
+	vk::SubmitInfo submitInfo{ .commandBufferCount = 1, .pCommandBuffers = &commands };
+	if (m_queueGraphics.submit(1, &submitInfo, pending.fence) != vk::Result::eSuccess)
+		throw std::runtime_error("failed to submit an image upload!");
+	m_pendingUploads.push_back(pending);
 }
 
 void Graphics::TransitionImageLayout(vk::Image image, vk::Format format, vk::ImageLayout oldLayout, vk::ImageLayout newLayout,
@@ -1451,16 +1600,16 @@ vk::ImageView Graphics::CreateImageView(vk::Image image, vk::Format format, vk::
 	return imageView;
 }
 
-vk::Sampler Graphics::CreateSampler(bool cleanup)
+vk::Sampler Graphics::CreateSampler(bool cleanup, bool clampToEdge)
 {
 	vk::SamplerCreateInfo samplerInfo {
 		.flags = {},
 		.magFilter = vk::Filter::eLinear,
 		.minFilter = vk::Filter::eLinear,
 		.mipmapMode = vk::SamplerMipmapMode::eLinear,
-		.addressModeU = vk::SamplerAddressMode::eRepeat,
-		.addressModeV = vk::SamplerAddressMode::eRepeat,
-		.addressModeW = vk::SamplerAddressMode::eRepeat,
+		.addressModeU = clampToEdge ? vk::SamplerAddressMode::eClampToEdge : vk::SamplerAddressMode::eRepeat,
+		.addressModeV = clampToEdge ? vk::SamplerAddressMode::eClampToEdge : vk::SamplerAddressMode::eRepeat,
+		.addressModeW = clampToEdge ? vk::SamplerAddressMode::eClampToEdge : vk::SamplerAddressMode::eRepeat,
 		.mipLodBias = 0.f,
 		.anisotropyEnable = m_physicalDeviceFeatures.samplerAnisotropy,
 		.maxAnisotropy = m_physicalDeviceProps.limits.maxSamplerAnisotropy,
@@ -1669,11 +1818,14 @@ bool Graphics::IsDeviceSuitable(const vk::PhysicalDevice& device)
 	}
 
 	device.getFeatures(&m_physicalDeviceFeatures);
+	// Nothing draws with a geometry shader; Metal (macOS) has none, so it's only asked for elsewhere.
+#ifndef __APPLE__
 	if (!m_physicalDeviceFeatures.geometryShader)
 	{
 		LOG_WARNING("Device does not support geometry shaders, skipping device...");
 		return false;
 	}
+#endif
 
 	//m_physicalDeviceFeatures2.pNext = &m_physicalDeviceVK12Features;
 	//device.getFeatures2(&m_physicalDeviceFeatures2);
@@ -1923,6 +2075,16 @@ void Graphics::CleanupVulkan()
 
 	CleanupSwapChain();
 	CleanupUpscaleResources();
+
+	m_logicalDevice.waitIdle();
+	for (const auto& pending : m_pendingUploads)
+	{
+		m_logicalDevice.destroyFence(pending.fence, nullptr);
+		m_logicalDevice.freeCommandBuffers(m_commandPoolDraw, 1, &pending.commandBuffer);
+		m_logicalDevice.destroyBuffer(pending.buffer, nullptr);
+		m_logicalDevice.freeMemory(pending.memory, nullptr);
+	}
+	m_pendingUploads.clear();
 
 	for (const auto& buffer : m_manageBuffers)
 		m_logicalDevice.destroyBuffer(buffer, nullptr);

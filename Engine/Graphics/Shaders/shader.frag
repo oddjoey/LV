@@ -31,6 +31,7 @@ layout(location = 1) out vec2 outMotion;
 
 const uint SHADING_UNLIT = 1u;
 const uint SHADING_SKY = 2u;
+const uint SHADING_CUTOUT = 3u;    // lit, cut out by the texture's alpha
 
 // Narkowicz's ACES fit: keeps bright sunlight from clipping to flat white.
 vec3 Tonemap(vec3 color) {
@@ -147,8 +148,16 @@ vec4 Shade() {
 
     vec3 albedo = fragColor * tint.rgb;
     // With DLSS the scene renders smaller, so textures are biased to the mip the window would use.
-    if (textureIndex != 0)
-        albedo *= texture(textures[nonuniformEXT(textureIndex) - 1], fragTexCoord, scene.renderParams.z).rgb;
+    if (textureIndex != 0) {
+        vec4 texel = texture(textures[nonuniformEXT(textureIndex) - 1], fragTexCoord, scene.renderParams.z);
+        albedo *= texel.rgb;
+        // Cut out where the texture's clear, speckled where it's partly covered.
+        if (shading == SHADING_CUTOUT) {
+            float dither = fract(sin(dot(floor(gl_FragCoord.xy), vec2(12.9898, 78.233))) * 43758.5453);
+            if (texel.a <= dither * 0.98 + 0.01)
+                discard;
+        }
+    }
 
     if (shading == SHADING_UNLIT)
         return vec4(Tonemap(albedo * max(emissive, 1.0)), tint.a);
