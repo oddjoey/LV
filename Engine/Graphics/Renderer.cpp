@@ -266,30 +266,48 @@ vk::CommandBuffer Renderer::RecordCommandBuffer(const uint32_t& imageIndex)
 		bool casterSetChanged = casterSet != m_lastShadowCasters;
 		m_lastShadowCasters = casterSet;
 		int count = (std::min)(static_cast<int>(m_lighting.pointLights.size()), MAX_POINT_LIGHTS);
+		// Which point light each shadow layer belongs to this frame.
+		std::array<int, MAX_SHADOWED_LIGHTS> layerLight;
+		layerLight.fill(-1);
 		for (int i = 0; i < count; i++)
 		{
 			int layer = static_cast<int>(scene.lightShadow[i].x);
-			if (scene.lightShadow[i].x < 0.f)
+			if (scene.lightShadow[i].x < 0.f || layer >= MAX_SHADOWED_LIGHTS)
 				continue;
+			layerLight[layer] = i;
 			const auto& light = m_lighting.pointLights[i];
-			if (!casterSetChanged && m_lampShadowHashes[layer] != 0)
+			// A new map, or a caster come or gone: redrawn now (that's rare).
+			if (casterSetChanged || m_lampShadowHashes[layer] == 0)
 			{
-				bool touched = false;
-				for (const auto& sphere : movedCasters)
-				{
-					glm::vec3 away = glm::vec3(sphere) - light.position;
-					float limit = light.range + sphere.w;
-					if (glm::dot(away, away) <= limit * limit)
-					{
-						touched = true;
-						break;
-					}
-				}
-				if (!touched)
-					continue;
+				m_lampShadowStale[layer] = false;
+				shadowPass(m_graphics->m_lightShadowFramebuffers[layer], m_graphics->m_lightShadowResolution, scene.lightShadowViewProj[layer],
+					&light.position, light.range, 0.f, &m_lampShadowHashes[layer]);
+				continue;
 			}
+			for (const auto& sphere : movedCasters)
+			{
+				glm::vec3 away = glm::vec3(sphere) - light.position;
+				float limit = light.range + sphere.w;
+				if (glm::dot(away, away) <= limit * limit)
+				{
+					m_lampShadowStale[layer] = true;
+					break;
+				}
+			}
+		}
+		// Something moving in reach: one of the waiting maps a frame, in turn.
+		constexpr int MOVED_REDRAWS_PER_FRAME = 1;
+		for (int tried = 0, redrawn = 0; tried < MAX_SHADOWED_LIGHTS && redrawn < MOVED_REDRAWS_PER_FRAME; tried++)
+		{
+			int layer = m_lampShadowTurn;
+			m_lampShadowTurn = (m_lampShadowTurn + 1) % MAX_SHADOWED_LIGHTS;
+			if (!m_lampShadowStale[layer] || layerLight[layer] < 0)
+				continue;
+			m_lampShadowStale[layer] = false;
+			const auto& light = m_lighting.pointLights[layerLight[layer]];
 			shadowPass(m_graphics->m_lightShadowFramebuffers[layer], m_graphics->m_lightShadowResolution, scene.lightShadowViewProj[layer],
 				&light.position, light.range, 0.f, &m_lampShadowHashes[layer]);
+			redrawn++;
 		}
 	}
 

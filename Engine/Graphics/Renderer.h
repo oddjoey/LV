@@ -92,6 +92,10 @@ private:
 	// Lamp shadow maps are only redrawn when what each lamp sees has changed (see the shadow pass).
 	std::array<uint64_t, MAX_SHADOWED_LIGHTS>	m_lampShadowHashes = {};
 	vk::Image									m_lampShadowCacheImage = {};
+	// Lamps something has moved in reach of, waiting for their map to be redrawn: a few a frame, taking turns, so
+	// something moving under several lamps (an engine rolled on its stand) doesn't redraw all their maps every frame.
+	std::array<bool, MAX_SHADOWED_LIGHTS>		m_lampShadowStale = {};
+	int											m_lampShadowTurn = 0;
 	// The sun's cascades are kept the same way while nothing in them (nor the view) changes: standing
 	// still at the bench, they aren't redrawn every frame.
 	std::array<uint64_t, SHADOW_CASCADES>		m_cascadeShadowHashes = {};
