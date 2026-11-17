@@ -21,4 +21,4 @@
 	url = https://github.com/ufbx/ufbx
 [submodule "Libraries/monocypher"]
 	path = Libraries/monocypher
-	url = https://github.com/LoupVaillant/Monocypher
+	url = https://github.com/LoupVaillant/Monocypher.git
