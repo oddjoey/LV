@@ -19,3 +19,6 @@
 [submodule "Libraries/ufbx"]
 	path = Libraries/ufbx
 	url = https://github.com/ufbx/ufbx
+[submodule "Libraries/monocypher"]
+	path = Libraries/monocypher
+	url = https://github.com/LoupVaillant/Monocypher
